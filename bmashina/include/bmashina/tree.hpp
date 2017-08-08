@@ -13,7 +13,6 @@
 #include "bmashina/composite.hpp"
 #include "bmashina/config.hpp"
 #include "bmashina/decorator.hpp"
-#include "bmashina/executor.hpp"
 #include "bmashina/node.hpp"
 #include "bmashina/status.hpp"
 
@@ -29,7 +28,6 @@ namespace bmashina
 	public:
 		typedef M Mashina;
 		typedef BasicTree<Mashina> Tree;
-		typedef BasicExecutor<Mashina> Executor;
 		typedef typename BasicChannel<Mashina>::Type Channel;
 		typedef BasicNode<Mashina> Node;
 		typedef BasicComposite<Mashina> Composite;
@@ -63,14 +61,12 @@ namespace bmashina
 		void clear();
 		bool empty() const;
 
-		Status execute();
-		void stop();
+		Status step();
 
 		Tree& operator =(const Tree& other) = delete;
 
 	private:
 		Mashina* mashina;
-		Executor executor;
 
 		Tree* parent = nullptr;
 
@@ -100,8 +96,10 @@ namespace bmashina
 			ChannelProxyNode(const Channel& channel);
 			~ChannelProxyNode() = default;
 
-			void interrupt(Executor& executor) override;
-			Status update(Executor& executor) override;
+		protected:
+			void preupdate(Mashina& mashina) override;
+			void postupdate(Mashina& mashina) override;
+			Status update(Mashina& mashina) override;
 
 		private:
 			Channel channel;
@@ -126,7 +124,6 @@ namespace bmashina
 template <typename M>
 bmashina::BasicTree<M>::BasicTree(Mashina& mashina) :
 	mashina(&mashina),
-	executor(mashina),
 	nodes(NodeSet::construct(mashina)),
 	channels(ChannelSet::construct(mashina)),
 	assignments(ChannelAssignments::construct(mashina)),
@@ -362,8 +359,6 @@ void bmashina::BasicTree<M>::clear()
 
 	channels.clear();
 	assignments.clear();
-
-	executor.reset();
 }
 
 template <typename M>
@@ -373,23 +368,26 @@ bool bmashina::BasicTree<M>::empty() const
 }
 
 template <typename M>
-bmashina::Status bmashina::BasicTree<M>::execute()
+bmashina::Status bmashina::BasicTree<M>::step()
 {
 	if (empty())
 	{
 		return Status::failure;
 	}
 
-	auto result = executor.update(*root_node);
-	executor.finish();
+	for (auto node: nodes)
+	{
+		node->before_step(*mashina);
+	}
+
+	auto result = root_node->step(*mashina);;
+	
+	for (auto node: nodes)
+	{
+		node->after_step(*mashina);
+	}
 
 	return result;
-}
-
-template <typename M>
-void bmashina::BasicTree<M>::stop()
-{
-	executor.reset();
 }
 
 template <typename M>
@@ -468,22 +466,32 @@ bmashina::BasicTree<M>::ChannelProxyNode::ChannelProxyNode(const Channel& channe
 }
 
 template <typename M>
-void bmashina::BasicTree<M>::ChannelProxyNode::interrupt(Executor& executor)
+void bmashina::BasicTree<M>::ChannelProxyNode::preupdate(Mashina& mashina)
 {
 	auto iter = Node::tree().assignments.find(channel);
 	if (iter != Node::tree().assignments.end() && !iter->second->empty())
 	{
-		return iter->second->root_node->interrupt(executor);
+		return iter->second->root_node->before_step(mashina);
 	}
 }
 
 template <typename M>
-bmashina::Status bmashina::BasicTree<M>::ChannelProxyNode::update(Executor& executor)
+void bmashina::BasicTree<M>::ChannelProxyNode::postupdate(Mashina& mashina)
 {
 	auto iter = Node::tree().assignments.find(channel);
 	if (iter != Node::tree().assignments.end() && !iter->second->empty())
 	{
-		return executor.update(*iter->second->root_node);
+		return iter->second->root_node->after_step(mashina);
+	}
+}
+
+template <typename M>
+bmashina::Status bmashina::BasicTree<M>::ChannelProxyNode::update(Mashina& mashina)
+{
+	auto iter = Node::tree().assignments.find(channel);
+	if (iter != Node::tree().assignments.end() && !iter->second->empty())
+	{
+		return iter->second->root_node->step(mashina);
 	}
 
 	return bmashina::Status::failure;

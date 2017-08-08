@@ -13,6 +13,8 @@ namespace bmashina
 {
 	enum class Status
 	{
+		none,
+
 		/// The node succeeded.
 		success,
 
