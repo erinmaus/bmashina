@@ -68,6 +68,9 @@ namespace bmashina
 	private:
 		Mashina* mashina;
 
+		typedef typename Allocator<Mashina>::Type AllocatorType;
+		AllocatorType allocator;
+
 		Tree* parent = nullptr;
 
 		typedef UnorderedSet<Mashina, Node*> NodeSet;
@@ -124,6 +127,7 @@ namespace bmashina
 template <typename M>
 bmashina::BasicTree<M>::BasicTree(Mashina& mashina) :
 	mashina(&mashina),
+	allocator(mashina),
 	nodes(NodeSet::construct(mashina)),
 	channels(ChannelSet::construct(mashina)),
 	assignments(ChannelAssignments::construct(mashina)),
@@ -350,7 +354,7 @@ void bmashina::BasicTree<M>::clear()
 {
 	for (auto node: nodes)
 	{
-		TreeAllocator<M>::deallocate(*mashina, node);
+		BasicAllocator::destroy<Node>(allocator, node);
 	}
 	nodes.clear();
 	children.clear();
@@ -436,7 +440,7 @@ template <typename M>
 template <typename N, typename... Arguments>
 N* bmashina::BasicTree<M>::create(Arguments&&... arguments)
 {
-	auto node = TreeAllocator<M>::template allocate<N>(*mashina, std::forward<Arguments>(arguments)...);
+	auto node = BasicAllocator::create<N>(allocator, std::forward<Arguments>(arguments)...);
 	nodes.emplace(node);
 
 	node->attach(*this);

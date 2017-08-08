@@ -92,20 +92,32 @@ namespace bmashina
 #endif
 	};
 
+	struct BasicAllocator
+	{
+		virtual void* allocate(std::size_t num_bytes) = 0;
+		virtual void deallocate(void* value) = 0;
+
+		template <typename T, typename... Arguments>
+		static T* create(BasicAllocator& allocator, Arguments&&... arguments);
+
+		template <typename T>
+		static void destroy(BasicAllocator& allocator, T* value);
+	};
+
 	template <typename M>
-	struct TreeAllocator
+	struct Allocator
 	{
 		static_assert(
 			detail::enable_default_allocator<M>::value,
-			"BMASHINA_DISABLE_DEFAULT_ALLOCATOR: specialization for bmashina::TreeAllocator required");
+			"BMASHINA_DISABLE_DEFAULT_ALLOCATOR: specialization for bmashina::Allocator required");
 
 #ifndef BMASHINA_DISABLE_DEFAULT_ALLOCATOR
-		typedef BasicNode<M> Node;
-
-		template <typename N, typename... Arguments>
-		static N* allocate(M& mashina, Arguments&&... arguments);
-
-		static void deallocate(M& mashina, Node* node);
+		struct Type : public BasicAllocator
+		{
+			Type(M& mashina);
+			void* allocate(std::size_t num_bytes) override;
+			void deallocate(void* value) override;
+		};
 #endif
 	};
 }
@@ -130,23 +142,42 @@ typename bmashina::UnorderedMap<M, K, V>::Type bmashina::UnorderedMap<M, K, V>::
 }
 #endif
 
+template <typename T, typename... Arguments>
+T* bmashina::BasicAllocator::create(BasicAllocator& allocator, Arguments&&... arguments)
+{
+	return new(allocator.allocate(sizeof(T))) T(std::forward<Arguments>(arguments)...);
+}
+
+template <typename T>
+void bmashina::BasicAllocator::destroy(BasicAllocator& allocator, T* value)
+{
+	assert(value != nullptr);
+
+	value->~T();
+	allocator.deallocate(value);
+}
+
 #ifndef BMASHINA_DISABLE_DEFAULT_ALLOCATOR
-template <typename M>
-template <typename N, typename... Arguments>
-N* bmashina::TreeAllocator<M>::allocate(M& mashina, Arguments&&... arguments)
-{
-	static_assert(
-		std::is_base_of<Node, N>::value,
-		"Node must be derived from bmashina::Node");
+#include <cstdlib>
 
-	return new N(std::forward<Arguments>(arguments)...);
+template <typename M>
+bmashina::Allocator<M>::Type::Type(M& m)
+{
+	// Nothing.
 }
 
 template <typename M>
-void bmashina::TreeAllocator<M>::deallocate(M& mashina, Node* node)
+void* bmashina::Allocator<M>::Type::allocate(std::size_t num_bytes)
 {
-	delete node;
+	return std::malloc(num_bytes);
 }
+
+template <typename M>
+void bmashina::Allocator<M>::Type::deallocate(void* value)
+{
+	return std::free(value);
+}
+
 #endif
 
 #endif
