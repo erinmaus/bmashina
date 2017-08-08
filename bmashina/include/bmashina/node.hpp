@@ -26,6 +26,7 @@ namespace bmashina
 	{
 	public:
 		typedef M Mashina;
+		typedef BasicNode<Mashina> Node;
 		typedef BasicTree<Mashina> Tree;
 
 		BasicNode() = default;
