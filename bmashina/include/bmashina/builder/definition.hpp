@@ -72,10 +72,10 @@ template <typename V>
 const bmashina::Reference<V>&
 bmashina::BasicNodeDictionaryDefinition<M, K>::get_property(const Key& key) const
 {
-	assert(has(key));
+	assert(has_property(key));
 
 #ifdef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (!has(key))
+	if (!has_property(key))
 	{
 		throw std::runtime_error("definition does not have property");
 	}
@@ -85,7 +85,7 @@ bmashina::BasicNodeDictionaryDefinition<M, K>::get_property(const Key& key) cons
 	auto reference = std::get<0>(property_tag);
 	auto tag = std::get<1>(property_tag);
 
-	assert(tag == Reference<V>::TAG);
+	assert(tag == &Reference<V>::TAG);
 
 #ifdef BMASHINA_DISABLE_EXCEPTION_HANDLING
 	if (tag != Reference<V>::TAG)
@@ -94,7 +94,7 @@ bmashina::BasicNodeDictionaryDefinition<M, K>::get_property(const Key& key) cons
 	}
 #endif
 
-	return *(static_cast<Reference<V>*>(reference));
+	return *(static_cast<const Reference<V>*>(reference));
 }
 
 template <typename M, typename K>

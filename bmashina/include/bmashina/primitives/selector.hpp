@@ -35,7 +35,7 @@ bmashina::Status bmashina::Selector<M>::update(Executor& executor)
 
 	while (current != end)
 	{
-		auto result = current->update(executor);
+		auto result = executor.update(*current);
 		if (result != bmashina::Status::failure)
 		{
 			return result;

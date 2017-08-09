@@ -9,6 +9,7 @@
 #ifndef BMASHINA_TREE_HPP
 #define BMASHINA_TREE_HPP
 
+#include <tuple>
 #include "bmashina/channel.hpp"
 #include "bmashina/composite.hpp"
 #include "bmashina/config.hpp"
@@ -16,6 +17,7 @@
 #include "bmashina/executor.hpp"
 #include "bmashina/node.hpp"
 #include "bmashina/status.hpp"
+#include "bmashina/state/state.hpp"
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
 #include <stdexcept>
@@ -30,6 +32,7 @@ namespace bmashina
 		typedef M Mashina;
 		typedef BasicTree<Mashina> Tree;
 		typedef BasicExecutor<Mashina> Executor;
+		typedef BasicState<Mashina> State;
 		typedef typename BasicChannel<Mashina>::Type Channel;
 		typedef BasicNode<Mashina> Node;
 		typedef BasicComposite<Mashina> Composite;
@@ -39,7 +42,31 @@ namespace bmashina
 		BasicTree(const Tree& other) = delete;
 		~BasicTree();
 
-		bool parented() const;
+		template <typename V, typename... Arguments>
+		const Reference<V>& local(Arguments&&... arguments);
+
+		template <typename V>
+		const Reference<V>& constant(const Property<V>& value);
+
+		void input(const detail::BaseReference& referece);
+		void input(
+			Node& node,
+			const detail::BaseReference& from,
+			const detail::BaseReference& to);
+		void input(
+			const Channel& channel,
+			const detail::BaseReference& from,
+			const detail::BaseReference& to);
+		void output(const detail::BaseReference& reference);
+		void output(
+			Node& node,
+			const detail::BaseReference& from,
+			const detail::BaseReference& to);
+		void output(
+			const Channel& channel,
+			const detail::BaseReference& from,
+			const detail::BaseReference& to);
+
 		bool compatible(const Tree& other) const;
 
 		template <typename N, typename... Arguments>
@@ -59,7 +86,9 @@ namespace bmashina
 		void clear();
 		bool empty() const;
 
-		Status execute(Executor& execute);
+		Status execute(Executor& executor);
+		void before_update(Executor& executor, Node& node);
+		void after_update(Executor& executor, Node& node);
 
 		Tree& operator =(const Tree& other) = delete;
 
@@ -68,8 +97,6 @@ namespace bmashina
 
 		typedef typename Allocator<Mashina>::Type AllocatorType;
 		AllocatorType allocator;
-
-		Tree* parent = nullptr;
 
 		typedef UnorderedSet<Mashina, Node*> NodeSet;
 		typename NodeSet::Type nodes;
@@ -82,14 +109,33 @@ namespace bmashina
 		typename ChannelSet::Type channels;
 
 		typedef UnorderedMap<Mashina, Channel, Tree*> ChannelAssignments;
-		typename ChannelAssignments::Type assignments;
+		typename ChannelAssignments::Type channel_assignments;
+
+		typedef UnorderedMap<Mashina, Channel, Node*> ChannelNodes;
+		typename ChannelNodes::Type channel_nodes;
 
 		typedef Vector<Mashina, Node*> NodeList;
 		typename NodeList::Type empty_node_list;
 
-		typedef UnorderedMap<Mashina, Node*, typename NodeList::Type> CompositeChildren;
-		typename CompositeChildren::Type children;
+		typedef UnorderedMap<Mashina, Node*, typename NodeList::Type> NodeChildren;
+		typename NodeChildren::Type children;
 		typename NodeList::Type& get_children(Node& node);
+
+		typedef std::tuple<const detail::BaseReference*, const detail::BaseReference*> FromToTuple;
+		typedef Vector<Mashina, FromToTuple> WireList;
+
+		typedef UnorderedMap<Mashina, Node*, typename WireList::Type> NodeWires;
+		typename NodeWires::Type node_inputs;
+		typename NodeWires::Type node_outputs;
+
+		typedef UnorderedSet<Mashina, const detail::BaseReference*> ReferenceList;
+		typename ReferenceList::Type inputs;
+		typename ReferenceList::Type outputs;
+
+		typedef UnorderedSet<Mashina, detail::BaseReference*> LocalSet;
+		typename LocalSet::Type locals;
+		typename LocalSet::Type constants;
+		State constant_values;
 
 		class ChannelProxyNode : public Node
 		{
@@ -97,10 +143,7 @@ namespace bmashina
 			ChannelProxyNode(const Channel& channel);
 			~ChannelProxyNode() = default;
 
-		protected:
-			void preupdate(Mashina& mashina) override;
-			void postupdate(Mashina& mashina) override;
-			Status update(Mashina& mashina) override;
+			Status update(Executor& executor) override;
 
 		private:
 			Channel channel;
@@ -128,9 +171,17 @@ bmashina::BasicTree<M>::BasicTree(Mashina& mashina) :
 	allocator(mashina),
 	nodes(NodeSet::construct(mashina)),
 	channels(ChannelSet::construct(mashina)),
-	assignments(ChannelAssignments::construct(mashina)),
-	children(CompositeChildren::construct(mashina)),
-	empty_node_list(NodeList::construct(mashina))
+	channel_assignments(ChannelAssignments::construct(mashina)),
+	channel_nodes(ChannelNodes::construct(mashina)),
+	children(NodeChildren::construct(mashina)),
+	empty_node_list(NodeList::construct(mashina)),
+	node_inputs(NodeWires::construct(mashina)),
+	node_outputs(NodeWires::construct(mashina)),
+	inputs(ReferenceList::construct(mashina)),
+	outputs(ReferenceList::construct(mashina)),
+	locals(LocalSet::construct(mashina)),
+	constants(LocalSet::construct(mashina)),
+	constant_values(mashina)
 {
 	// Nothing.
 }
@@ -139,12 +190,6 @@ template <typename M>
 bmashina::BasicTree<M>::~BasicTree()
 {
 	clear();
-}
-
-template <typename M>
-bool bmashina::BasicTree<M>::parented() const
-{
-	return parent != nullptr;
 }
 
 template <typename M>
@@ -211,6 +256,7 @@ void bmashina::BasicTree<M>::child(Node& parent, const Channel& channel)
 	auto child = create<ChannelProxyNode>(channel);
 	auto& children = get_children(parent);
 	children.emplace_back(child);
+	channel_nodes.emplace(channel, child);
 }
 
 template <typename M>
@@ -218,7 +264,6 @@ void bmashina::BasicTree<M>::assign(const Channel& channel, Tree& tree)
 {
 	assert(has(channel));
 	assert(compatible(tree));
-	assert(!tree.parented());
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
 	if (!has(channel))
@@ -230,11 +275,6 @@ void bmashina::BasicTree<M>::assign(const Channel& channel, Tree& tree)
 	{
 		throw std::runtime_error("assigning incompatible tree to channel");
 	}
-
-	if (tree.parented())
-	{
-		throw std::runtime_error("trying to assign previously parented tree");
-	}
 #endif
 
 	if (assigned(channel))
@@ -242,8 +282,7 @@ void bmashina::BasicTree<M>::assign(const Channel& channel, Tree& tree)
 		unassign(channel);
 	}
 
-	assignments.emplace(channel, &tree);
-	tree.parent = this;
+	channel_assignments.emplace(channel, &tree);
 }
 
 template <typename M>
@@ -258,7 +297,7 @@ bool bmashina::BasicTree<M>::assigned(const Channel& channel) const
 	}
 #endif
 
-	return assignments.count(channel) != 0;
+	return channel_assignments.count(channel) != 0;
 }
 
 template <typename M>
@@ -273,9 +312,7 @@ void bmashina::BasicTree<M>::unassign(const Channel& channel)
 	}
 #endif
 
-	auto iter = assignments.find(channel);
-	iter->second->parent = nullptr;
-	assignments.erase(iter);
+	channel_assignments.erase(channel);
 }
 
 template <typename M>
@@ -299,11 +336,24 @@ void bmashina::BasicTree<M>::clear()
 	}
 	nodes.clear();
 	children.clear();
+	node_inputs.clear();
+	node_outputs.clear();
 
 	root_node = nullptr;
 
+	for (auto local: locals)
+	{
+		BasicAllocator::destroy<detail::BaseReference>(allocator, local);
+	}
+	locals.clear();
+	inputs.clear();
+	outputs.clear();
+	constants.clear();
+	constant_values.clear();
+
 	channels.clear();
-	assignments.clear();
+	channel_assignments.clear();
+	channel_nodes.clear();
 }
 
 template <typename M>
@@ -321,13 +371,68 @@ bmashina::Status bmashina::BasicTree<M>::execute(Executor& executor)
 	}
 
 	Status result;
+	auto& before_state = executor.state();
 	executor.enter(*this);
+	auto& after_state = executor.state();
+
+	for (auto constant: constants)
 	{
-		result = root_node->update(executor);
+		State::copy(constant_values, after_state, *constant);
 	}
+
+	for (auto input: inputs)
+	{
+		State::copy(before_state, after_state, *input);
+	}
+
+	result = executor.update(*root_node);
+
 	executor.leave(*this);
 
+	for (auto output: outputs)
+	{
+		State::copy(after_state, before_state, *output);
+	}
+
 	return result;
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::before_update(Executor& executor, Node& node)
+{
+	assert(has(node));
+
+	auto iter = node_inputs.find(&node);
+	if (iter != node_inputs.end())
+	{
+		auto& inputs = iter->second;
+		for (auto i: inputs)
+		{
+			auto from = std::get<0>(i);
+			auto to = std::get<1>(i);
+
+			State::copy(executor.state(), executor.state(), *from, *to);
+		}
+	}
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::after_update(Executor& executor, Node& node)
+{
+	assert(has(node));
+
+	auto iter = node_outputs.find(&node);
+	if (iter != node_outputs.end())
+	{
+		auto& outputs = iter->second;
+		for (auto i: outputs)
+		{
+			auto from = std::get<0>(i);
+			auto to = std::get<1>(i);
+
+			State::copy(executor.state(), executor.state(), *from, *to);
+		}
+	}
 }
 
 template <typename M>
@@ -406,35 +511,138 @@ bmashina::BasicTree<M>::ChannelProxyNode::ChannelProxyNode(const Channel& channe
 }
 
 template <typename M>
-void bmashina::BasicTree<M>::ChannelProxyNode::preupdate(Mashina& mashina)
+bmashina::Status bmashina::BasicTree<M>::ChannelProxyNode::update(Executor& executor)
 {
-	auto iter = Node::tree().assignments.find(channel);
-	if (iter != Node::tree().assignments.end() && !iter->second->empty())
+	Status status = bmashina::Status::failure;
+
+	auto& parent_tree = this->tree();
+	auto iter = parent_tree.channel_assignments.find(channel);
+	if (iter != parent_tree.channel_assignments.end() && !iter->second->empty())
 	{
-		return iter->second->root_node->before_step(mashina);
+		return iter->second->execute(executor);
 	}
+
+	return Status::failure;
 }
 
 template <typename M>
-void bmashina::BasicTree<M>::ChannelProxyNode::postupdate(Mashina& mashina)
+template <typename V, typename... Arguments>
+const bmashina::Reference<V>& bmashina::BasicTree<M>::local(Arguments&&... arguments)
 {
-	auto iter = Node::tree().assignments.find(channel);
-	if (iter != Node::tree().assignments.end() && !iter->second->empty())
-	{
-		return iter->second->root_node->after_step(mashina);
-	}
+	auto reference = BasicAllocator::template create<Reference<V>>(allocator, std::forward<Arguments>(arguments)...);
+	locals.insert(reference);
+
+	return *reference;
 }
 
 template <typename M>
-bmashina::Status bmashina::BasicTree<M>::ChannelProxyNode::update(Mashina& mashina)
+template <typename V>
+const bmashina::Reference<V>& bmashina::BasicTree<M>::constant(const Property<V>& value)
 {
-	auto iter = Node::tree().assignments.find(channel);
-	if (iter != Node::tree().assignments.end() && !iter->second->empty())
+	auto reference = BasicAllocator::template create<Reference<V>>(allocator);
+	locals.insert(reference);
+	constants.insert(reference);
+	constant_values.set(*reference, value);
+
+	return *reference;
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::input(const detail::BaseReference& reference)
+{
+	inputs.insert(&reference);
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::output(const detail::BaseReference& reference)
+{
+	outputs.insert(&reference);
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::input(
+	Node& node,
+	const detail::BaseReference& from,
+	const detail::BaseReference& to)
+{
+	assert(has(node));
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (!has(node))
 	{
-		return iter->second->root_node->step(mashina);
+		throw std::runtime_error("node not in tree");
+	}
+#endif
+
+	auto iter = node_inputs.find(&node);
+	if (iter == node_inputs.end())
+	{
+		iter = node_inputs.emplace(&node, WireList::construct(*mashina)).first;
 	}
 
-	return bmashina::Status::failure;
+	iter->second.push_back(std::make_tuple(&from, &to));
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::input(
+	const Channel& channel,
+	const detail::BaseReference& from,
+	const detail::BaseReference& to)
+{
+	assert(has(channel));
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (!has(channel))
+	{
+		throw std::runtime_error("channel does not exist");
+	}
+#endif
+
+	auto iter = channel_nodes.find(channel);
+	input(*iter->second, from, to);
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::output(
+	Node& node,
+	const detail::BaseReference& from,
+	const detail::BaseReference& to)
+{
+	assert(has(node));
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (!has(node))
+	{
+		throw std::runtime_error("node not in tree");
+	}
+#endif
+
+	auto iter = node_outputs.find(&node);
+	if (iter == node_outputs.end())
+	{
+		iter = node_outputs.emplace(&node, WireList::construct(*mashina)).first;
+	}
+
+	iter->second.push_back(std::make_tuple(&from, &to));
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::output(
+	const Channel& channel,
+	const detail::BaseReference& from,
+	const detail::BaseReference& to)
+{
+	assert(has(channel));
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (!has(channel))
+	{
+		throw std::runtime_error("channel does not exist");
+	}
+#endif
+
+	auto iter = channel_nodes.find(channel);
+	output(*iter->second, from, to);
 }
 
 template <typename M>

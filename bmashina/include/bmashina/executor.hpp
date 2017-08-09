@@ -43,13 +43,12 @@ namespace bmashina
 
 		void enter(Tree& tree);
 		void leave(Tree& tree);
+		Status update(Node& node);
 
 		Mashina* operator ->();
 		Mashina& operator *();
 
 	private:
-		void finish();
-
 		Mashina* mashina_instance;
 
 		typedef typename Allocator<Mashina>::Type AllocatorType;
@@ -137,8 +136,34 @@ void bmashina::BasicExecutor<M>::leave(Tree& tree)
 #endif
 
 	leave_frame(tree);
-	current_frame->index = 0;
 	--current_depth;
+
+	if (current_depth == 0)
+	{
+		current_frame->index = 0;
+	}
+}
+
+template <typename M>
+bmashina::Status bmashina::BasicExecutor<M>::update(Node& node)
+{
+	assert(current_depth > 0);
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (current_depth == 0)
+	{
+		throw std::runtime_error("tree is not executing");
+	}
+#endif
+
+	Status status;
+	current_frame->tree->before_update(*this, node);
+	{
+		status = node.update(*this);
+	}
+	current_frame->tree->after_update(*this, node);
+
+	return status;
 }
 
 template <typename M>

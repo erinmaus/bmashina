@@ -35,7 +35,7 @@ bmashina::Status bmashina::Sequence<M>::update(Executor& executor)
 
 	while (current != end)
 	{
-		auto result = current->update(executor);
+		auto result = executor.update(*current);
 		if (result == bmashina::Status::working)
 		{
 			return bmashina::Status::working;

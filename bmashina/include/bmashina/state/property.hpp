@@ -9,6 +9,7 @@
 #ifndef BMASHINA_STATE_PROPERTY_HPP
 #define BMASHINA_STATE_PROPERTY_HPP
 
+#include <string>
 #include "bmashina/config.hpp"
 
 namespace bmashina
@@ -43,7 +44,7 @@ namespace bmashina
 		Value& operator *();
 		const Value& operator *() const;
 
-		BaseProperty* clone(BasicAllocator& allocator) const;
+		BaseProperty* clone(BasicAllocator& allocator) const override;
 
 		operator Value&();
 		operator const Value&() const;

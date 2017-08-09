@@ -18,6 +18,11 @@ namespace bmashina
 		struct BaseReference
 		{
 			typedef std::size_t Tag;
+
+			BaseReference() = default;
+			BaseReference(const char* name);
+
+			const char* name = nullptr;
 		};
 	}
 
@@ -26,11 +31,27 @@ namespace bmashina
 	{
 		typedef V Type;
 
+		Reference() = default;
+		Reference(const char* name);
+
 		const static Tag TAG;
 	};
 }
 
 template <typename V>
 const bmashina::detail::BaseReference::Tag bmashina::Reference<V>::TAG = 0;
+
+inline bmashina::detail::BaseReference::BaseReference(const char* name) :
+	name(name)
+{
+	// Nothing.
+}
+
+template <typename V>
+bmashina::Reference<V>::Reference(const char* name) :
+	detail::BaseReference(name)
+{
+	// Nothing.
+}
 
 #endif
