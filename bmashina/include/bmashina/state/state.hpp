@@ -45,7 +45,10 @@ namespace bmashina
 		void set(const R& reference, const Property<typename R::Type>& value);
 
 		template <typename R>
-		void wire(const R& from, const R& to);
+		void reserve(const R& reference);
+
+		void wire(const detail::BaseReference& from, const detail::BaseReference& to);
+		void snip(const detail::BaseReference& from);
 
 		State& operator = (const State& other) = delete;
 
@@ -57,6 +60,10 @@ namespace bmashina
 
 		typedef UnorderedMap<Mashina, const void*, detail::BaseProperty*> ValueMap;
 		typename ValueMap::Type values;
+		void remove_value(const void* key);
+
+		typedef UnorderedMap<Mashina, const void*, detail::BaseReference::Tag> TagMap;
+		typename TagMap::Type tags;
 
 		typedef UnorderedMap<Mashina, const void*, const void*> AliasMap;
 		typename AliasMap::Type aliases;
@@ -69,6 +76,7 @@ bmashina::BasicState<M>::BasicState(Mashina& mashina) :
 	mashina(&mashina),
 	allocator(mashina),
 	values(ValueMap::construct(mashina)),
+	tags(TagMap::construct(mashina)),
 	aliases(AliasMap::construct(mashina))
 {
 	// Nothing.
@@ -87,6 +95,14 @@ bmashina::BasicState<M>::~BasicState()
 
 template <typename M>
 template <typename R>
+bool bmashina::BasicState<M>::has(const R& reference) const
+{
+	const void* key = resolve_alias(&reference);
+	return values.count(key) != 0;
+}
+
+template <typename M>
+template <typename R>
 typename bmashina::Property<typename R::Type>
 bmashina::BasicState<M>::get(const R& reference) const
 {
@@ -101,8 +117,8 @@ bmashina::BasicState<M>::get(const R& reference) const
 	}
 #endif
 
-	auto property = values[key];
-	return *(static_cast<Property<typename R::Type>>(property));
+	auto property = values.find(key)->second;
+	return *(static_cast<Property<typename R::Type>*>(property));
 }
 
 template <typename M>
@@ -113,14 +129,22 @@ bmashina::BasicState<M>::get(const R& reference, const typename R::Type& default
 	const void* key = resolve_alias(&reference);
 
 	auto value = values.find(key);
-	if (value == values.end(key))
+	if (value == values.end())
 	{
 		return default_value;
 	}
 	else
 	{
-		return *(static_cast<Property<typename R::Type>>(value->second));
+		return *(static_cast<Property<typename R::Type>*>(value->second));
 	}
+}
+
+template <typename M>
+template <typename R>
+void bmashina::BasicState<M>::reserve(const R& reference)
+{
+	const void* key = &reference;
+	tags[key] = R::TAG;
 }
 
 template <typename M>
@@ -128,30 +152,54 @@ template <typename R>
 void bmashina::BasicState<M>::set(const R& reference, const Property<typename R::Type>& value)
 {
 	auto key = resolve_alias(&reference);
-	auto property = BasicAllocator::create<Property<typename R::Type>>(value);
+	auto property = BasicAllocator::create<Property<typename R::Type>>(allocator, value);
 
+	remove_value(key);
 	auto iter = values.find(key);
-	if (iter == values.end())
-	{
-		values.insert(key, property);
-	}
-	else
-	{
-		BasicAllocator::destroy<detail::BaseProperty>(allocator, iter->second);
-		iter->second = property;
-	}
+	assert(values.count(key) == 0);
+	
+	values.emplace(key, property);
+
+	reserve<R>(reference);
 }
 
 template <typename M>
-template <typename R>
-void bmashina::BasicState<M>::wire(const R& from, const R& to)
+void bmashina::BasicState<M>::wire(
+	const detail::BaseReference& from,
+	const detail::BaseReference& to)
 {
+	if (resolve_alias(&from) == &to)
+	{
+		return;
+	}
+
 	if (has(from))
 	{
-		set(to, get(from));
+		remove_value(&to);
+		assert(values.count(&to) == 0);
+
+		values[&to] = values[&from]->clone(allocator);
+		remove_value(&from);
 	}
 
 	aliases[&from] = &to;
+}
+
+template <typename M>
+void bmashina::BasicState<M>::snip(const detail::BaseReference& from)
+{
+	aliases.erase(&from);
+}
+
+template <typename M>
+void bmashina::BasicState<M>::remove_value(const void* key)
+{
+	auto iter = values.find(key);
+	if (iter != values.end())
+	{
+		BasicAllocator::destroy<detail::BaseProperty>(allocator, iter->second);
+		values.erase(iter);
+	}
 }
 
 template <typename M>

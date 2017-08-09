@@ -9,13 +9,28 @@
 #ifndef BMASHINA_STATE_REFERENCE_HPP
 #define BMASHINA_STATE_REFERENCE_HPP
 
+#include <cstddef>
+
 namespace bmashina
 {
+	namespace detail
+	{
+		struct BaseReference
+		{
+			typedef std::size_t Tag;
+		};
+	}
+
 	template <typename V>
-	struct Reference
+	struct Reference : public detail::BaseReference
 	{
 		typedef V Type;
+
+		const static Tag TAG;
 	};
 }
+
+template <typename V>
+const bmashina::detail::BaseReference::Tag bmashina::Reference<V>::TAG = 0;
 
 #endif
