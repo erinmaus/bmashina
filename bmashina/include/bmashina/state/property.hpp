@@ -45,6 +45,9 @@ namespace bmashina
 
 		BaseProperty* clone(BasicAllocator& allocator) const;
 
+		operator Value&();
+		operator const Value&() const;
+
 	private:
 		Value value;
 	};
@@ -109,6 +112,18 @@ bmashina::detail::BaseProperty*
 bmashina::Property<V>::clone(BasicAllocator& allocator) const
 {
 	return BasicAllocator::create<Property<V>>(allocator, *this);
+}
+
+template <typename V>
+bmashina::Property<V>::operator Value&()
+{
+	return get();
+}
+
+template <typename V>
+bmashina::Property<V>::operator const Value&() const
+{
+	return get();
 }
 
 #endif
