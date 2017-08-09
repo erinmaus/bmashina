@@ -13,6 +13,7 @@
 #include "bmashina/composite.hpp"
 #include "bmashina/config.hpp"
 #include "bmashina/decorator.hpp"
+#include "bmashina/executor.hpp"
 #include "bmashina/node.hpp"
 #include "bmashina/status.hpp"
 #include "bmashina/tree.hpp"

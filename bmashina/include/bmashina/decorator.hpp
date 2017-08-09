@@ -22,19 +22,29 @@ namespace bmashina
 	class BasicDecorator : public BasicNode<M>
 	{
 	public:
-		using typename BasicNode<M>::Mashina;
 		using typename BasicNode<M>::Node;
-		using typename BasicNode<M>::Tree;
+		using typename BasicNode<M>::Executor;
 
 		BasicDecorator() = default;
 		~BasicDecorator() = default;
 
+		Status update(Executor& executor) override;
+
 	protected:
 		bool has_child();
 		Node& child();
-
-		Status update(Mashina& mashina) override;
 	};
+}
+
+template <typename M>
+bmashina::Status bmashina::BasicDecorator<M>::update(Executor& executor)
+{
+	if (has_child())
+	{
+		return child().update(executor);
+	}
+
+	return Status::success;
 }
 
 template <typename M>
@@ -61,17 +71,6 @@ typename bmashina::BasicDecorator<M>::Node& bmashina::BasicDecorator<M>::child()
 #endif
 
 	return *this->tree().children_begin(*this);
-}
-
-template <typename M>
-bmashina::Status bmashina::BasicDecorator<M>::update(Mashina& mashina)
-{
-	if (has_child())
-	{
-		return child().step(mashina);
-	}
-
-	return Status::success;
 }
 
 #endif

@@ -17,26 +17,25 @@ namespace bmashina
 	class Sequence : public BasicComposite<M>
 	{
 	public:
-		using typename BasicComposite<M>::Mashina;
-		using typename BasicComposite<M>::Tree;
+		using typename BasicNode<M>::Tree;
+		using typename BasicNode<M>::Executor;
 
 		Sequence() = default;
 		~Sequence() = default;
 
-	protected:
-		Status update(Mashina& mashina) override;
+		Status update(Executor& executor) override;
 	};
 }
 
 template <typename M>
-bmashina::Status bmashina::Sequence<M>::update(Mashina& mashina)
+bmashina::Status bmashina::Sequence<M>::update(Executor& executor)
 {
 	auto current = this->tree().children_begin(*this);
 	auto end = this->tree().children_end(*this);
 
 	while (current != end)
 	{
-		auto result = current->step(mashina);
+		auto result = current->update(executor);
 		if (result == bmashina::Status::working)
 		{
 			return bmashina::Status::working;

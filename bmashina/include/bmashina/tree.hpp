@@ -13,6 +13,7 @@
 #include "bmashina/composite.hpp"
 #include "bmashina/config.hpp"
 #include "bmashina/decorator.hpp"
+#include "bmashina/executor.hpp"
 #include "bmashina/node.hpp"
 #include "bmashina/status.hpp"
 
@@ -28,6 +29,7 @@ namespace bmashina
 	public:
 		typedef M Mashina;
 		typedef BasicTree<Mashina> Tree;
+		typedef BasicExecutor<Mashina> Executor;
 		typedef typename BasicChannel<Mashina>::Type Channel;
 		typedef BasicNode<Mashina> Node;
 		typedef BasicComposite<Mashina> Composite;
@@ -61,7 +63,7 @@ namespace bmashina
 		void clear();
 		bool empty() const;
 
-		Status step();
+		Status execute(Executor& execute);
 
 		Tree& operator =(const Tree& other) = delete;
 
@@ -372,24 +374,19 @@ bool bmashina::BasicTree<M>::empty() const
 }
 
 template <typename M>
-bmashina::Status bmashina::BasicTree<M>::step()
+bmashina::Status bmashina::BasicTree<M>::execute(Executor& executor)
 {
 	if (empty())
 	{
 		return Status::failure;
 	}
 
-	for (auto node: nodes)
+	Status result;
+	executor.enter(*this);
 	{
-		node->before_step(*mashina);
+		result = root_node->update(executor);
 	}
-
-	auto result = root_node->step(*mashina);;
-	
-	for (auto node: nodes)
-	{
-		node->after_step(*mashina);
-	}
+	executor.leave(*this);
 
 	return result;
 }

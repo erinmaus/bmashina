@@ -22,12 +22,16 @@ namespace bmashina
 	class BasicTree;
 
 	template <typename M>
+	class BasicExecutor;
+
+	template <typename M>
 	class BasicNode
 	{
 	public:
 		typedef M Mashina;
 		typedef BasicNode<Mashina> Node;
 		typedef BasicTree<Mashina> Tree;
+		typedef BasicExecutor<Mashina> Executor;
 
 		BasicNode() = default;
 		BasicNode(const BasicNode& other) = delete;
@@ -36,9 +40,7 @@ namespace bmashina
 		void attach(Tree& tree);
 		bool attached() const;
 
-		void before_step(Mashina& mashina);
-		void after_step(Mashina& mashina);
-		Status step(Mashina& mashina);
+		virtual Status update(Executor& executor);
 
 		BasicNode& operator =(const BasicNode& other) = delete;
 
@@ -46,20 +48,8 @@ namespace bmashina
 		Tree& tree();
 		const Tree& tree() const;
 
-		virtual void preupdate(Mashina& mashina);
-		virtual void postupdate(Mashina& mashina);
-		virtual Status update(Mashina& mashina);
-
-		virtual void interrupted(Mashina& mashina);
-		virtual void activated(Mashina& mashina);
-		virtual void deactivated(Mashina& mashina);
-
 	private:
 		Tree* tree_instance = nullptr;
-
-		bool was_active = false;
-		bool is_active = false;
-		Status previous_status = Status::none;
 	};
 }
 
@@ -117,78 +107,9 @@ bmashina::BasicNode<M>::tree() const
 }
 
 template <typename M>
-void bmashina::BasicNode<M>::before_step(Mashina& mashina)
-{
-	is_active = false;
-	preupdate(mashina);
-}
-
-template <typename M>
-void bmashina::BasicNode<M>::after_step(Mashina& mashina)
-{
-	if (was_active && !is_active)
-	{
-		if (previous_status == Status::working)
-		{
-			interrupted(mashina);
-		}
-
-		deactivated(mashina);
-	}
-
-	was_active = is_active;
-	postupdate(mashina);
-}
-
-template <typename M>
-bmashina::Status bmashina::BasicNode<M>::step(Mashina& mashina)
-{
-	if (!was_active)
-	{
-		activated(mashina);
-	}
-
-	is_active = true;
-	previous_status = update(mashina);
-
-	return previous_status;
-}
-
-template <typename M>
-void bmashina::BasicNode<M>::preupdate(Mashina& mashina)
-{
-	// Nothing.
-}
-
-template <typename M>
-void bmashina::BasicNode<M>::postupdate(Mashina& mashina)
-{
-	// Nothing.
-}
-
-template <typename M>
-bmashina::Status bmashina::BasicNode<M>::update(Mashina& mashina)
+bmashina::Status bmashina::BasicNode<M>::update(Executor& executor)
 {
 	return Status::success;
-}
-
-
-template <typename M>
-void bmashina::BasicNode<M>::interrupted(Mashina& mashina)
-{
-	// Nothing.
-}
-
-template <typename M>
-void bmashina::BasicNode<M>::activated(Mashina& mashina)
-{
-	// Nothing.
-}
-
-template <typename M>
-void bmashina::BasicNode<M>::deactivated(Mashina& mashina)
-{
-	// Nothing.
 }
 
 #endif
