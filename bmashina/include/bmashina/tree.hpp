@@ -46,12 +46,8 @@ namespace bmashina
 		N& root(Arguments&&... arguments);
 
 		template <typename N, typename... Arguments>
-		N& child(Composite& parent, Arguments&&... arguments);
-		void child(Composite& parent, const Channel& channel);
-
-		template <typename N, typename... Arguments>
-		N& child(Decorator& parent, Arguments&&... arguments);
-		void child(Decorator& parent, const Channel& channel);
+		N& child(Node& parent, Arguments&&... arguments);
+		void child(Node& parent, const Channel& channel);
 
 		void assign(const Channel& channel, Tree& tree);
 		bool assigned(const Channel& channel) const;
@@ -174,14 +170,14 @@ N& bmashina::BasicTree<M>::root(Arguments&&... arguments)
 
 template <typename M>
 template <typename N, typename... Arguments>
-N& bmashina::BasicTree<M>::child(Composite& parent, Arguments&&... arguments)
+N& bmashina::BasicTree<M>::child(Node& parent, Arguments&&... arguments)
 {
 	assert(has(parent));
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
 	if (!has(parent))
 	{
-		throw std::runtime_error("trying to add child to composite not in tree");
+		throw std::runtime_error("parent not in tree");
 	}
 #endif
 
@@ -193,7 +189,7 @@ N& bmashina::BasicTree<M>::child(Composite& parent, Arguments&&... arguments)
 }
 
 template <typename M>
-void bmashina::BasicTree<M>::child(Composite& parent, const Channel& channel)
+void bmashina::BasicTree<M>::child(Node& parent, const Channel& channel)
 {
 	assert(has(parent));
 	assert(!has(channel));
@@ -201,64 +197,7 @@ void bmashina::BasicTree<M>::child(Composite& parent, const Channel& channel)
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
 	if (!has(parent))
 	{
-		throw std::runtime_error("trying to add child to composite not in tree");
-	}
-
-	if (has(channel))
-	{
-		throw std::runtime_error("trying to add duplicate channel");
-	}
-#endif
-
-	channels.insert(channel);
-
-	auto child = create<ChannelProxyNode>(channel);
-	auto& children = get_children(parent);
-	children.emplace_back(child);
-}
-
-template <typename M>
-template <typename N, typename... Arguments>
-N& bmashina::BasicTree<M>::child(Decorator& parent, Arguments&&... arguments)
-{
-	assert(has(parent));
-	assert(children.count(&parent) == 0);
-
-#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (!has(parent))
-	{
-		throw std::runtime_error("trying to add child to decorator not in tree");
-	}
-
-	if (children.count(&parent) != 0)
-	{
-		throw std::runtime_error("decorator already has child");
-	}
-#endif
-
-	auto child = create<N>(std::forward<Arguments>(arguments)...);
-	auto& children = get_children(parent);
-	children.emplace_back(child);
-
-	return *child;
-}
-
-template <typename M>
-void bmashina::BasicTree<M>::child(Decorator& parent, const Channel& channel)
-{
-	assert(has(parent));
-	assert(children.count(&parent) == 0);
-	assert(!has(channel));
-
-#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (!has(parent))
-	{
-		throw std::runtime_error("trying to add child to decorator not in tree");
-	}
-
-	if (children.count(&parent) != 0)
-	{
-		throw std::runtime_error("decorator already has child");
+		throw std::runtime_error("parent not in tree");
 	}
 
 	if (has(channel))
