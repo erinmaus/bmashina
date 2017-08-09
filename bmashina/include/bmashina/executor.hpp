@@ -110,6 +110,14 @@ bmashina::BasicExecutor<M>::mashina()
 }
 
 template <typename M>
+typename bmashina::BasicExecutor<M>::State&
+bmashina::BasicExecutor<M>::state()
+{
+	assert(current_frame != nullptr);
+	return current_frame->state;
+}
+
+template <typename M>
 void bmashina::BasicExecutor<M>::enter(Tree& tree)
 {
 	push_frame(tree);
