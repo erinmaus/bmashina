@@ -17,5 +17,6 @@
 #include "bmashina/node.hpp"
 #include "bmashina/status.hpp"
 #include "bmashina/tree.hpp"
+#include "bmashina/state/state.hpp"
 
 #endif

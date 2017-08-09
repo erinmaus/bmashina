@@ -12,9 +12,10 @@
 #include <type_traits>
 
 #ifndef BMASHINA_DISABLE_STL_CONTAINERS
-#include <vector>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #endif
 
 namespace bmashina
@@ -62,6 +63,19 @@ namespace bmashina
 
 #ifndef BMASHINA_DISABLE_STL_CONTAINERS
 		typedef typename std::vector<T> Type;
+		static Type construct(M& mashina);
+#endif
+	};
+
+	template <typename M>
+	struct String
+	{
+		static_assert(
+			detail::enable_stl_containers<M>::value,
+			"BMASHINA_DISABLE_STL_CONTAINERS: specialization for bmashina::String required");
+
+#ifndef BMASHINA_DISABLE_STL_CONTAINERS
+		typedef typename std::string Type;
 		static Type construct(M& mashina);
 #endif
 	};
@@ -125,6 +139,12 @@ namespace bmashina
 #ifndef BMASHINA_DISABLE_STL_CONTAINERS
 template <typename M, typename T>
 typename bmashina::Vector<M, T>::Type bmashina::Vector<M, T>::construct(M& mashina)
+{
+	return Type();
+}
+
+template <typename M>
+typename bmashina::String<M>::Type bmashina::String<M>::construct(M& mashina)
 {
 	return Type();
 }
