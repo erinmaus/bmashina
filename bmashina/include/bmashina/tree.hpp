@@ -312,6 +312,9 @@ void bmashina::BasicTree<M>::unassign(const Channel& channel)
 	}
 #endif
 
+	auto iter = channel_nodes.find(channel);
+	node_inputs.erase(iter->second);
+	node_outputs.erase(iter->second);
 	channel_assignments.erase(channel);
 }
 

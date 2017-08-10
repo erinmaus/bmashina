@@ -236,7 +236,7 @@ bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::channel(const Channel& c
 	}
 #endif
 
-	tree->channel(*current_node, channel);
+	tree->child(*current_node, channel);
 
 	NativeTreeBuilderProxy result = *this;
 	result.parent = this;
