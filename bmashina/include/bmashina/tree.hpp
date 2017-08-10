@@ -87,6 +87,7 @@ namespace bmashina
 		bool empty() const;
 
 		Status execute(Executor& executor);
+
 		void before_update(Executor& executor, Node& node);
 		void after_update(Executor& executor, Node& node);
 

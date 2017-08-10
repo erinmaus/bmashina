@@ -48,6 +48,24 @@ namespace bmashina
 		Mashina* operator ->();
 		Mashina& operator *();
 
+#ifndef BMASHINA_DISABLE_DEBUG
+		class Preview
+		{
+		public:
+			virtual void before_enter_tree(Tree* tree) = 0;
+			virtual void after_enter_tree(Tree* tree) = 0;
+			virtual void before_leave_tree(Tree* tree) = 0;
+			virtual void after_leave_tree(Tree* tree) = 0;
+			virtual void before_update_node(Node& node) = 0;
+			virtual void after_update_node(Node& node, Status status) = 0;
+		};
+
+		std::size_t get_current_depth() const;
+		std::size_t get_current_index() const;
+
+		void set_preview(Preview* value);
+#endif
+
 	private:
 		Mashina* mashina_instance;
 
@@ -82,6 +100,10 @@ namespace bmashina
 		StateFrame* new_frame(Tree& tree);
 
 		std::size_t current_depth = 0;
+
+#ifndef BMASHINA_DISABLE_DEBUG
+		Preview* preview = nullptr;
+#endif
 	};
 }
 
@@ -119,8 +141,22 @@ bmashina::BasicExecutor<M>::state()
 template <typename M>
 void bmashina::BasicExecutor<M>::enter(Tree& tree)
 {
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
+	{
+		preview->before_enter_tree(current_frame->tree);
+	}
+#endif
+
 	push_frame(tree);
 	++current_depth;
+
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
+	{
+		preview->after_enter_tree(&tree);
+	}
+#endif
 }
 
 template <typename M>
@@ -135,8 +171,22 @@ void bmashina::BasicExecutor<M>::leave(Tree& tree)
 	}
 #endif
 
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
+	{
+		preview->before_leave_tree(&tree);
+	}
+#endif
+
 	leave_frame(tree);
 	--current_depth;
+
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
+	{
+		preview->after_leave_tree(current_frame->tree);
+	}
+#endif
 
 	if (current_depth == 0)
 	{
@@ -158,11 +208,23 @@ bmashina::Status bmashina::BasicExecutor<M>::update(Node& node)
 
 	Status status;
 	current_frame->tree->before_update(*this, node);
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
+	{
+		preview->before_update_node(node);
+	}
+#endif
 	{
 		node.visit(*this);
 		status = node.update(*this);
 	}
 	current_frame->tree->after_update(*this, node);
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
+	{
+		preview->after_update_node(node, status);
+	}
+#endif
 
 	return status;
 }
@@ -217,6 +279,24 @@ typename bmashina::BasicExecutor<M>::Mashina&
 bmashina::BasicExecutor<M>::operator *()
 {
 	return mashina();
+}
+
+template <typename M>
+std::size_t bmashina::BasicExecutor<M>::get_current_depth() const
+{
+	return current_depth;
+}
+
+template <typename M>
+std::size_t bmashina::BasicExecutor<M>::get_current_index() const
+{
+	return current_frame->index;
+}
+
+template <typename M>
+void bmashina::BasicExecutor<M>::set_preview(Preview* value)
+{
+	preview = value;
 }
 
 template <typename M>

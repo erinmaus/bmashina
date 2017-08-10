@@ -9,6 +9,7 @@
 #ifndef BMASHINA_DEBUG_DEBUG_HPP
 #define BMASHINA_DEBUG_DEBUG_HPP
 
+#include "bmashina/debug/context.hpp"
 #include "bmashina/debug/propertyPrinter.hpp"
 
 #endif
