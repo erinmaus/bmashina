@@ -77,6 +77,10 @@ namespace bmashina
 #ifndef BMASHINA_DISABLE_STL_CONTAINERS
 		typedef typename std::string Type;
 		static Type construct(M& mashina);
+		static Type construct(M& mashina, const char* value);
+
+		template <typename V>
+		static Type to_string(M& mashina, const V& value);
 #endif
 	};
 
@@ -147,6 +151,27 @@ template <typename M>
 typename bmashina::String<M>::Type bmashina::String<M>::construct(M& mashina)
 {
 	return Type();
+}
+
+template <typename M>
+typename bmashina::String<M>::Type
+bmashina::String<M>::construct(M& mashina, const char* value)
+{
+	if (value == nullptr)
+	{
+		return Type();
+	}
+	else
+	{
+		return Type(value);
+	}
+}
+
+template <typename M>
+template <typename V>
+typename bmashina::String<M>::Type bmashina::String<M>::to_string(M& mashina, const V& value)
+{
+	return std::to_string(value);
 }
 
 template <typename M, typename T>

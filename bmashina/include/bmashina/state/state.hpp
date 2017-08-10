@@ -17,6 +17,11 @@
 #include <stdexcept>
 #endif
 
+#ifndef BMASHINA_DISABLE_DEBUG
+#include <functional>
+#include "bmashina/debug/propertyPrinter.hpp"
+#endif
+
 namespace bmashina
 {
 	template <typename M>
@@ -58,11 +63,23 @@ namespace bmashina
 			const detail::BaseReference& source_reference,
 			const detail::BaseReference& destination_reference);
 
+#ifndef BMASHINA_DISABLE_DEBUG
+		typedef typename String<M>::Type StringType;
+		typedef std::function<void(const StringType& key, const StringType& value)> PropertyIter;
+		void for_each_property(const PropertyIter& callback) const;
+#endif
+
 	private:
 		Mashina* mashina;
 
 		typedef typename Allocator<Mashina>::Type AllocatorType;
 		AllocatorType allocator;
+
+#ifndef BMASHINA_DISABLE_DEBUG
+		typedef std::function<StringType(Mashina&, const State&)> PropertyPrintFunc;
+		typedef UnorderedMap<Mashina, const detail::BaseReference*, PropertyPrintFunc> ValuePrinterMap;
+		typename ValuePrinterMap::Type value_printers;
+#endif
 
 		typedef UnorderedMap<Mashina, const detail::BaseReference*, detail::BaseProperty*> ValueMap;
 		typename ValueMap::Type values;
@@ -152,6 +169,19 @@ void bmashina::BasicState<M>::set(const R& reference, const Property<typename R:
 	auto property = BasicAllocator::create<Property<typename R::Type>>(allocator, value);
 	values.emplace(&reference, property);
 
+#ifndef BMASHINA_DISABLE_DEBUG
+	auto printer = [&reference](Mashina& mashina, const State& state)
+	{
+		auto value = state.values.find(&reference);
+		assert(value != state.values.end());
+
+		auto property = static_cast<Property<typename R::Type>*>(value->second);
+		return PropertyPrinter<Mashina, typename R::Type>::print(mashina, *property);
+	};
+
+	value_printers[&reference] = printer;
+#endif
+
 	reserve<R>(reference);
 }
 
@@ -188,6 +218,12 @@ void bmashina::BasicState<M>::copy(
 		destination.remove_value(&reference);
 		destination.values[&reference] = value->second->clone(destination.allocator);
 		destination.tags[&reference] = tag->second;
+
+#ifndef BMASHINA_DISABLE_DEBUG
+		auto printer = source.value_printers.find(&reference);
+		assert(printer != source.value_printers.end());
+		destination.value_printers[&reference] = printer->second;
+#endif
 	}
 }
 
@@ -214,6 +250,12 @@ void bmashina::BasicState<M>::copy(
 		destination.remove_value(&destination_reference);
 		destination.values[&destination_reference] = source_value->second->clone(destination.allocator);
 		destination.tags[&destination_reference] = source_tag->second;
+
+#ifndef BMASHINA_DISABLE_DEBUG
+		auto source_printer = source.value_printers.find(&source_reference);
+		assert(source_printer != source.value_printers.end());
+		destination.value_printers[&destination_reference] = source_printer->second;
+#endif
 	}
 }
 
@@ -228,7 +270,40 @@ void bmashina::BasicState<M>::remove_value(const detail::BaseReference* key)
 
 		assert(tags.count(key) != 0);
 		tags.erase(key);
+
+#ifndef BMASHINA_DISABLE_DEBUG
+		value_printers.erase(key);
+#endif
 	}
 }
+
+#ifndef BMASHINA_DISABLE_DEBUG
+#include <cstdio>
+
+template <typename M>
+void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback) const
+{
+	for (auto& i: values)
+	{
+		assert(value_printers.count(i.first) != 0);
+
+		auto reference = i.first;
+		auto& printer = value_printers.find(i.first)->second;
+		auto value = printer(*mashina, *this);
+
+		if (reference->name == nullptr)
+		{
+			char name[32];
+			std::snprintf(name, sizeof(name), "%p", reference);
+
+			callback(String<M>::construct(*mashina, name), value);
+		}
+		else
+		{
+			callback(String<M>::construct(*mashina, reference->name), value);
+		}
+	}
+}
+#endif
 
 #endif
