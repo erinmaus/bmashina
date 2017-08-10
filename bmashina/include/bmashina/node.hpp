@@ -11,6 +11,7 @@
 
 #include <cassert>
 #include "bmashina/status.hpp"
+#include "bmashina/state/reference.hpp"
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
 #include <stdexcept>
@@ -40,6 +41,7 @@ namespace bmashina
 		void attach(Tree& tree);
 		bool attached() const;
 
+		void visit(Executor& executor);
 		virtual Status update(Executor& executor);
 
 		BasicNode& operator =(const BasicNode& other) = delete;
@@ -48,8 +50,11 @@ namespace bmashina
 		Tree& tree();
 		const Tree& tree() const;
 
+		virtual void activated(Executor& executor);
+
 	private:
 		Tree* tree_instance = nullptr;
+		Reference<bool> visited = Reference<bool>("_node_visited");
 	};
 }
 
@@ -107,9 +112,26 @@ bmashina::BasicNode<M>::tree() const
 }
 
 template <typename M>
+void bmashina::BasicNode<M>::visit(Executor& executor)
+{
+	if (!executor.state().has(visited))
+	{
+		executor.state().set(visited, true);
+
+		activated(executor);
+	}
+}
+
+template <typename M>
 bmashina::Status bmashina::BasicNode<M>::update(Executor& executor)
 {
 	return Status::success;
+}
+
+template <typename M>
+void bmashina::BasicNode<M>::activated(Executor& executor)
+{
+	// Nothing.
 }
 
 #endif

@@ -159,6 +159,7 @@ bmashina::Status bmashina::BasicExecutor<M>::update(Node& node)
 	Status status;
 	current_frame->tree->before_update(*this, node);
 	{
+		node.visit(*this);
 		status = node.update(*this);
 	}
 	current_frame->tree->after_update(*this, node);
