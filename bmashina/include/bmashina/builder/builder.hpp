@@ -11,6 +11,7 @@
 
 #include "bmashina/builder/dictionary.hpp"
 #include "bmashina/builder/definition.hpp"
+#include "bmashina/builder/nativeTreeBuilder.hpp"
 #include "bmashina/builder/nativeDictionary.hpp"
 #include "bmashina/builder/nativeDefinition.hpp"
 
