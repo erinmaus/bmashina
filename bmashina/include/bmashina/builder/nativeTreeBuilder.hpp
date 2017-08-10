@@ -140,7 +140,7 @@ bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::inout(const Reference<V>
 	assert(current_node == nullptr);
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (current_node == nullptr)
+	if (current_node != nullptr)
 	{
 		throw std::runtime_error("cannot bind singular inout to node");
 	}
@@ -160,7 +160,7 @@ bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::in(const Reference<V>& i
 	assert(current_node == nullptr);
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (current_node == nullptr)
+	if (current_node != nullptr)
 	{
 		throw std::runtime_error("cannot bind singular input to node");
 	}
@@ -179,7 +179,7 @@ bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::out(const Reference<V>& 
 	assert(current_node == nullptr);
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (current_node == nullptr)
+	if (current_node != nullptr)
 	{
 		throw std::runtime_error("cannot bind singular input to node");
 	}
