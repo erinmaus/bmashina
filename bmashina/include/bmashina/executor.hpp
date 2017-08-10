@@ -43,6 +43,9 @@ namespace bmashina
 
 		void enter(Tree& tree);
 		void leave(Tree& tree);
+
+		void enter(Node& node);
+		void leave(Node& node, Status status);
 		Status update(Node& node);
 
 		Mashina* operator ->();
@@ -78,13 +81,16 @@ namespace bmashina
 				Mashina& mashina,
 				AllocatorType& allocator,
 				Tree* tree,
+				Node* node,
 				StateFrame* parent = nullptr);
 			~StateFrame();
 
 			AllocatorType* allocator;
 			StateFrame* parent;
 			Tree* tree;
+			Node* node;
 			State state;
+			State* tree_state;
 			std::size_t index = 0;
 
 			void shrink(std::size_t new_index);
@@ -95,9 +101,9 @@ namespace bmashina
 		StateFrame* frames = nullptr;
 		StateFrame* current_frame = nullptr;
 
-		void push_frame(Tree& tree);
-		void leave_frame(Tree& tree);
-		StateFrame* new_frame(Tree& tree);
+		void push_frame(Tree& tree, Node* node = nullptr);
+		void leave_frame(Tree& tree, Node* node = nullptr);
+		StateFrame* new_frame(Tree& tree, Node* node);
 
 		std::size_t current_depth = 0;
 
@@ -111,7 +117,7 @@ template <typename M>
 bmashina::BasicExecutor<M>::BasicExecutor(Mashina& mashina) :
 	mashina_instance(&mashina),
 	allocator(mashina),
-	frames(BasicAllocator::create<StateFrame>(allocator, mashina, allocator, nullptr)),
+	frames(BasicAllocator::create<StateFrame>(allocator, mashina, allocator, nullptr, nullptr)),
 	current_frame(frames)
 {
 	// Nothing.
@@ -149,7 +155,6 @@ void bmashina::BasicExecutor<M>::enter(Tree& tree)
 #endif
 
 	push_frame(tree);
-	++current_depth;
 
 #ifndef BMASHINA_DISABLE_DEBUG
 	if (preview != nullptr)
@@ -179,7 +184,6 @@ void bmashina::BasicExecutor<M>::leave(Tree& tree)
 #endif
 
 	leave_frame(tree);
-	--current_depth;
 
 #ifndef BMASHINA_DISABLE_DEBUG
 	if (preview != nullptr)
@@ -187,11 +191,34 @@ void bmashina::BasicExecutor<M>::leave(Tree& tree)
 		preview->after_leave_tree(current_frame->tree);
 	}
 #endif
+}
 
-	if (current_depth == 0)
+template <typename M>
+void bmashina::BasicExecutor<M>::enter(Node& node)
+{
+	assert(current_depth > 0);
+
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
 	{
-		current_frame->index = 0;
+		preview->before_update_node(node);
 	}
+#endif
+
+	push_frame(*current_frame->tree, &node);
+}
+
+template <typename M>
+void bmashina::BasicExecutor<M>::leave(Node& node, Status status)
+{
+	leave_frame(*current_frame->tree, &node);
+
+#ifndef BMASHINA_DISABLE_DEBUG
+	if (preview != nullptr)
+	{
+		preview->after_update_node(node, status);
+	}
+#endif
 }
 
 template <typename M>
@@ -206,41 +233,24 @@ bmashina::Status bmashina::BasicExecutor<M>::update(Node& node)
 	}
 #endif
 
-	Status status;
-	current_frame->tree->before_update(*this, node);
-#ifndef BMASHINA_DISABLE_DEBUG
-	if (preview != nullptr)
-	{
-		preview->before_update_node(node);
-	}
-#endif
-	{
-		node.visit(*this);
-		status = node.update(*this);
-	}
-	current_frame->tree->after_update(*this, node);
-#ifndef BMASHINA_DISABLE_DEBUG
-	if (preview != nullptr)
-	{
-		preview->after_update_node(node, status);
-	}
-#endif
-
-	return status;
+	return current_frame->tree->update(*this, node);
 }
 
 template <typename M>
-void bmashina::BasicExecutor<M>::push_frame(Tree& tree)
+void bmashina::BasicExecutor<M>::push_frame(Tree& tree, Node* node)
 {
 	auto index = current_frame->index;
 	++current_frame->index;
+	++current_depth;
 
+	auto previous_frame = current_frame;
 	if (index < current_frame->children.size())
 	{
 		auto next_tree = current_frame->children[index]->tree;
-		if (next_tree != &tree)
+		auto next_node = current_frame->children[index]->node;
+		if (next_tree != &tree || next_node != node)
 		{
-			auto frame = new_frame(tree);
+			auto frame = new_frame(tree, node);
 			current_frame->shrink(index);
 			current_frame->children.push_back(frame);
 			current_frame = frame;
@@ -248,23 +258,32 @@ void bmashina::BasicExecutor<M>::push_frame(Tree& tree)
 		else
 		{
 			current_frame = current_frame->children[index];
+			current_frame->index = 0;
 		}
 	}
 	else
 	{
-		auto frame = new_frame(tree);
+		auto frame = new_frame(tree, node);
 		current_frame->children.emplace_back(frame);
 		current_frame = frame;
 	}
+
+	State::copy(previous_frame->state, current_frame->state);
 }
 
 template <typename M>
-void bmashina::BasicExecutor<M>::leave_frame(Tree& tree)
+void bmashina::BasicExecutor<M>::leave_frame(Tree& tree, Node* node)
 {
-	assert(current_frame != nullptr);
+	--current_depth;
 
-	current_frame->index = 0;
+	assert(current_frame != nullptr);
+	assert(current_frame->tree == &tree);
+	assert(current_frame->node == node);
+
+	auto previous_frame = current_frame;
 	current_frame = current_frame->parent;
+
+	State::copy(previous_frame->state, current_frame->state);
 }
 
 template <typename M>
@@ -301,20 +320,33 @@ void bmashina::BasicExecutor<M>::set_preview(Preview* value)
 
 template <typename M>
 typename bmashina::BasicExecutor<M>::StateFrame*
-bmashina::BasicExecutor<M>::new_frame(Tree& tree)
+bmashina::BasicExecutor<M>::new_frame(Tree& tree, Node* node)
 {
-	return BasicAllocator::create<StateFrame>(allocator, *mashina_instance, allocator, &tree, current_frame);
+	return BasicAllocator::create<StateFrame>(allocator, *mashina_instance, allocator, &tree, node, current_frame);
 }
 
 template <typename M>
-bmashina::BasicExecutor<M>::StateFrame::StateFrame(Mashina& mashina, AllocatorType& allocator, Tree* tree, StateFrame* parent) :
+bmashina::BasicExecutor<M>::StateFrame::StateFrame(
+	Mashina& mashina,
+	AllocatorType& allocator,
+	Tree* tree,
+	Node* node,
+	StateFrame* parent) :
 	allocator(&allocator),
 	parent(parent),
 	tree(tree),
+	node(node),
 	state(mashina),
 	children(Children::construct(mashina))
 {
-	// Nothing.
+	if (node == nullptr)
+	{
+		tree_state = &state;
+	}
+	else
+	{
+		tree_state = parent->tree_state;
+	}
 }
 
 template <typename M>

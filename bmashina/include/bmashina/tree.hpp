@@ -88,12 +88,14 @@ namespace bmashina
 
 		Status execute(Executor& executor);
 
-		void before_update(Executor& executor, Node& node);
-		void after_update(Executor& executor, Node& node);
+		Status update(Executor& executor, Node& node);
 
 		Tree& operator =(const Tree& other) = delete;
 
 	private:
+		void before_update(Executor& executor, Node& node);
+		void after_update(Executor& executor, Node& node, Status status);
+
 		Mashina* mashina;
 
 		typedef typename Allocator<Mashina>::Type AllocatorType;
@@ -402,9 +404,26 @@ bmashina::Status bmashina::BasicTree<M>::execute(Executor& executor)
 }
 
 template <typename M>
-void bmashina::BasicTree<M>::before_update(Executor& executor, Node& node)
+bmashina::Status bmashina::BasicTree<M>::update(Executor& executor, Node& node)
 {
 	assert(has(node));
+
+	Status status;
+	before_update(executor, node);
+	{
+		status = node.update(executor);
+	}
+	after_update(executor, node, status);
+
+	return status;
+}
+
+template <typename M>
+void bmashina::BasicTree<M>::before_update(Executor& executor, Node& node)
+{
+	auto& before_state = executor.state();
+	executor.enter(node);
+	auto& after_state = executor.state();
 
 	auto iter = node_inputs.find(&node);
 	if (iter != node_inputs.end())
@@ -415,26 +434,40 @@ void bmashina::BasicTree<M>::before_update(Executor& executor, Node& node)
 			auto from = std::get<0>(i);
 			auto to = std::get<1>(i);
 
-			State::copy(executor.state(), executor.state(), *from, *to);
+			State::copy(before_state, after_state, *from, *to);
 		}
 	}
 }
 
 template <typename M>
-void bmashina::BasicTree<M>::after_update(Executor& executor, Node& node)
+void bmashina::BasicTree<M>::after_update(Executor& executor, Node& node, Status status)
 {
-	assert(has(node));
+	auto& before_state = executor.state();
+	executor.leave(node, status);
+	auto& after_state = executor.state();
 
-	auto iter = node_outputs.find(&node);
-	if (iter != node_outputs.end())
+	auto outputs_iter = node_outputs.find(&node);
+	if (outputs_iter != node_outputs.end())
 	{
-		auto& outputs = iter->second;
+		auto& outputs = outputs_iter->second;
 		for (auto i: outputs)
 		{
 			auto from = std::get<0>(i);
 			auto to = std::get<1>(i);
 
-			State::copy(executor.state(), executor.state(), *from, *to);
+			State::copy(before_state, after_state, *from, *to);
+			after_state.unset(*from);
+		}
+	}
+
+	auto inputs_iter = node_inputs.find(&node);
+	if (inputs_iter != node_inputs.end())
+	{
+		auto& inputs = inputs_iter->second;
+		for (auto i: inputs)
+		{
+			auto to = std::get<1>(i);
+			after_state.unset(*to);
 		}
 	}
 }

@@ -51,10 +51,12 @@ namespace bmashina
 		template <typename R>
 		void reserve(const R& reference);
 
+		void unset(const detail::BaseReference& reference);
 		void clear();
 
 		State& operator =(const State& other) = delete;
 
+		static void copy(const State& source, State& destination);
 		static void copy(
 			const State& source, State& destination,
 			const detail::BaseReference& reference);
@@ -76,7 +78,7 @@ namespace bmashina
 		AllocatorType allocator;
 
 #ifndef BMASHINA_DISABLE_DEBUG
-		typedef std::function<StringType(Mashina&, const State&)> PropertyPrintFunc;
+		typedef std::function<StringType(Mashina&, const State&, const detail::BaseReference*)> PropertyPrintFunc;
 		typedef UnorderedMap<Mashina, const detail::BaseReference*, PropertyPrintFunc> ValuePrinterMap;
 		typename ValuePrinterMap::Type value_printers;
 #endif
@@ -159,6 +161,12 @@ void bmashina::BasicState<M>::reserve(const R& reference)
 }
 
 template <typename M>
+void bmashina::BasicState<M>::unset(const detail::BaseReference& reference)
+{
+	remove_value(&reference);
+}
+
+template <typename M>
 template <typename R>
 void bmashina::BasicState<M>::set(const R& reference, const Property<typename R::Type>& value)
 {
@@ -170,9 +178,9 @@ void bmashina::BasicState<M>::set(const R& reference, const Property<typename R:
 	values.emplace(&reference, property);
 
 #ifndef BMASHINA_DISABLE_DEBUG
-	auto printer = [&reference](Mashina& mashina, const State& state)
+	auto printer = [](Mashina& mashina, const State& state, const detail::BaseReference* reference)
 	{
-		auto value = state.values.find(&reference);
+		auto value = state.values.find(reference);
 		assert(value != state.values.end());
 
 		auto property = static_cast<Property<typename R::Type>*>(value->second);
@@ -194,6 +202,17 @@ void bmashina::BasicState<M>::clear()
 	}
 	values.clear();
 	tags.clear();
+}
+
+template <typename M>
+void bmashina::BasicState<M>::copy(
+	const State& source,
+	State& destination)
+{
+	for (auto i: source.values)
+	{
+		copy(source, destination, *i.first);
+	}
 }
 
 template <typename M>
@@ -289,7 +308,7 @@ void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback) co
 
 		auto reference = i.first;
 		auto& printer = value_printers.find(i.first)->second;
-		auto value = printer(*mashina, *this);
+		auto value = printer(*mashina, *this, i.first);
 
 		if (reference->name == nullptr)
 		{
