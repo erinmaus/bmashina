@@ -38,10 +38,10 @@ namespace bmashina
 		bool has(const detail::BaseReference& reference) const;
 
 		template <typename R>
-		Property<typename R::Type> get(const R& reference) const;
+		typename R::Type get(const R& reference) const;
 
 		template <typename R>
-		Property<typename R::Type> get(
+		typename R::Type get(
 			const R& reference,
 			const typename R::Type& default_value) const;
 
@@ -121,7 +121,7 @@ bool bmashina::BasicState<M>::has(const detail::BaseReference& reference) const
 
 template <typename M>
 template <typename R>
-typename bmashina::Property<typename R::Type>
+typename R::Type
 bmashina::BasicState<M>::get(const R& reference) const
 {
 	assert(values.count(&reference) != 0);
@@ -134,12 +134,12 @@ bmashina::BasicState<M>::get(const R& reference) const
 #endif
 
 	auto property = values.find(&reference)->second;
-	return *(static_cast<Property<typename R::Type>*>(property));
+	return (static_cast<Property<typename R::Type>*>(property))->get();
 }
 
 template <typename M>
 template <typename R>
-bmashina::Property<typename R::Type>
+typename R::Type
 bmashina::BasicState<M>::get(const R& reference, const typename R::Type& default_value) const
 {
 	auto value = values.find(&reference);
@@ -149,7 +149,7 @@ bmashina::BasicState<M>::get(const R& reference, const typename R::Type& default
 	}
 	else
 	{
-		return *(static_cast<Property<typename R::Type>*>(value->second));
+		return (static_cast<Property<typename R::Type>*>(value->second))->get();
 	}
 }
 
