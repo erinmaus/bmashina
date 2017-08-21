@@ -74,6 +74,7 @@ namespace bmashina
 
 		template <typename N, typename... Arguments>
 		N& child(Node& parent, Arguments&&... arguments);
+		Node& child(Node& parent, Tree& tree);
 		void child(Node& parent, const Channel& channel);
 
 		void assign(const Channel& channel, Tree& tree);
@@ -150,6 +151,18 @@ namespace bmashina
 
 		private:
 			Channel channel;
+		};
+
+		class TreeProxyNode : public Node
+		{
+		public:
+			TreeProxyNode(Tree& tree);
+			~TreeProxyNode() = default;
+
+			Status update(Executor& executor) override;
+
+		private:
+			Tree* tree;
 		};
 
 	public:
@@ -260,6 +273,13 @@ void bmashina::BasicTree<M>::child(Node& parent, const Channel& channel)
 	auto& children = get_children(parent);
 	children.emplace_back(child);
 	channel_nodes.emplace(channel, child);
+}
+
+template <typename M>
+typename bmashina::BasicTree<M>::Node&
+bmashina::BasicTree<M>::child(Node& parent, Tree& tree)
+{
+	return child<TreeProxyNode>(parent, tree);
 }
 
 template <typename M>
@@ -561,6 +581,20 @@ bmashina::Status bmashina::BasicTree<M>::ChannelProxyNode::update(Executor& exec
 
 	return Status::failure;
 }
+
+template <typename M>
+bmashina::BasicTree<M>::TreeProxyNode::TreeProxyNode(Tree& tree) :
+	tree(&tree)
+{
+	// Nothing.
+}
+
+template <typename M>
+bmashina::Status bmashina::BasicTree<M>::TreeProxyNode::update(Executor& executor)
+{
+	return this->tree->execute(executor);
+}
+
 
 template <typename M>
 template <typename V, typename... Arguments>

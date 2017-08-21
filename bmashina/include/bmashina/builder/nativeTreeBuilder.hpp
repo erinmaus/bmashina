@@ -19,7 +19,6 @@ namespace bmashina
 	class NativeTreeBuilder
 	{
 	public:
-
 		NativeTreeBuilder() = default;
 		~NativeTreeBuilder() = default;
 
@@ -58,8 +57,10 @@ namespace bmashina
 
 			template <typename N, typename... Arguments>
 			NativeTreeBuilderProxy child(Arguments&&... arguments);
+			NativeTreeBuilderProxy child(Tree& tree);
 
 			NativeTreeBuilderProxy channel(const Channel& channel);
+			NativeTreeBuilderProxy channel(const Channel& channel, Tree& value);
 
 			template <typename V>
 			NativeTreeBuilderProxy inout(const Reference<V>& input_output, const Reference<V>& reference);
@@ -78,6 +79,7 @@ namespace bmashina
 			Node* current_node = nullptr;
 			Channel current_channel;
 			bool is_channel = false;
+			Tree* current_tree = nullptr;
 		};
 	};
 }
@@ -219,6 +221,32 @@ bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::child(Arguments&&... arg
 
 template <typename M>
 typename bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>
+bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::child(Tree& child_tree)
+{
+	assert(parent != nullptr);
+	assert(!is_channel);
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (parent == nullptr)
+	{
+		throw std::runtime_error("tree cannot be root node");
+	}
+
+	if (is_channel)
+	{
+		throw std::runtime_error("channels cannot have children");
+	}
+#endif
+
+	NativeTreeBuilderProxy result = *this;
+	result.parent = this;
+	result.current_node = &tree->child(*result.current_node, child_tree);
+	result.current_tree = &child_tree;
+	return result;
+}
+
+template <typename M>
+typename bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>
 bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::channel(const Channel& channel)
 {
 	assert(parent != nullptr);
@@ -244,6 +272,32 @@ bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::channel(const Channel& c
 	result.current_channel = channel;
 	result.is_channel = true;
 	return result;
+}
+
+template <typename M>
+typename bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>
+bmashina::NativeTreeBuilder::NativeTreeBuilderProxy<M>::channel(
+	const Channel& channel, Tree& child_tree)
+{
+	if (current_tree == nullptr)
+	{
+		assert(parent == nullptr);
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+		if (parent != nullptr)
+		{
+			throw std::runtime_error("can only assign channel at root level or after child tree");
+		}
+#endif
+
+		tree->assign(channel, child_tree);
+	}
+	else
+	{
+		current_tree->assign(channel, child_tree);
+	}
+
+	return *this;
 }
 
 template <typename M>
