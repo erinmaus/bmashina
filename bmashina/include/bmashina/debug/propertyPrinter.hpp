@@ -24,7 +24,7 @@ template <typename M, typename V>
 typename bmashina::String<M>::Type
 bmashina::PropertyPrinter<M, V>::print(M& mashina, const Property<V>& property)
 {
-	return String<M>::to_string(mashina, property.get());
+	return ToString<M, V>::get(mashina, property.get());
 }
 
 #endif

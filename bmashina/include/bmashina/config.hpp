@@ -12,6 +12,8 @@
 #include <type_traits>
 
 #ifndef BMASHINA_DISABLE_STL_CONTAINERS
+#include <cstdio>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -78,9 +80,18 @@ namespace bmashina
 		typedef typename std::string Type;
 		static Type construct(M& mashina);
 		static Type construct(M& mashina, const char* value);
+#endif
+	};
 
-		template <typename V>
-		static Type to_string(M& mashina, const V& value);
+	template <typename M, typename V>
+	struct ToString
+	{
+		static_assert(
+			detail::enable_stl_containers<M>::value,
+			"BMASHINA_DISABLE_STL_CONTAINERS: specialization for bmashina::String required");
+
+#ifndef BMASHINA_DISABLE_STL_CONTAINERS
+		static typename String<M>::Type get(M& mashina, const V& value);
 #endif
 	};
 
@@ -167,11 +178,14 @@ bmashina::String<M>::construct(M& mashina, const char* value)
 	}
 }
 
-template <typename M>
-template <typename V>
-typename bmashina::String<M>::Type bmashina::String<M>::to_string(M& mashina, const V& value)
+#include <sstream>
+template <typename M, typename V>
+typename bmashina::String<M>::Type
+bmashina::ToString<M, V>::get(M& mashina, const V& value)
 {
-	return std::to_string(value);
+	std::stringstream stream;
+	stream << value;
+	return stream.str();
 }
 
 template <typename M, typename T>
