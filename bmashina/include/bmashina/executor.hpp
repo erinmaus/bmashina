@@ -34,12 +34,15 @@ namespace bmashina
 		typedef BasicTree<Mashina> Tree;
 		typedef BasicNode<Mashina> Node;
 		typedef BasicState<Mashina> State;
+		typedef BasicExecutor<Mashina> Executor;
 
 		BasicExecutor(Mashina& mashina);
 		~BasicExecutor();
 
 		Mashina& mashina();
 		State& state();
+
+		void reset();
 
 		void enter(Tree& tree);
 		void leave(Tree& tree);
@@ -78,13 +81,14 @@ namespace bmashina
 		struct StateFrame
 		{
 			StateFrame(
-				Mashina& mashina,
+				Executor& executor,
 				AllocatorType& allocator,
 				Tree* tree,
 				Node* node,
 				StateFrame* parent = nullptr);
 			~StateFrame();
 
+			Executor* executor;
 			AllocatorType* allocator;
 			StateFrame* parent;
 			Tree* tree;
@@ -117,7 +121,7 @@ template <typename M>
 bmashina::BasicExecutor<M>::BasicExecutor(Mashina& mashina) :
 	mashina_instance(&mashina),
 	allocator(mashina),
-	frames(BasicAllocator::create<StateFrame>(allocator, mashina, allocator, nullptr, nullptr)),
+	frames(BasicAllocator::create<StateFrame>(allocator, *this, allocator, nullptr, nullptr)),
 	current_frame(frames)
 {
 	// Nothing.
@@ -142,6 +146,23 @@ bmashina::BasicExecutor<M>::state()
 {
 	assert(current_frame != nullptr);
 	return current_frame->state;
+}
+
+template <typename M>
+void bmashina::BasicExecutor<M>::reset()
+{
+	assert(current_depth == 0);
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (current_depth == 0)
+	{
+		throw std::runtime_error("cannot reset while executing");
+	}
+#endif
+
+	assert(current_frame != nullptr);
+	this->frames->shrink(0);
+	this->current_frame = this->frames;
 }
 
 template <typename M>
@@ -322,22 +343,23 @@ template <typename M>
 typename bmashina::BasicExecutor<M>::StateFrame*
 bmashina::BasicExecutor<M>::new_frame(Tree& tree, Node* node)
 {
-	return BasicAllocator::create<StateFrame>(allocator, *mashina_instance, allocator, &tree, node, current_frame);
+	return BasicAllocator::create<StateFrame>(allocator, *this, allocator, &tree, node, current_frame);
 }
 
 template <typename M>
 bmashina::BasicExecutor<M>::StateFrame::StateFrame(
-	Mashina& mashina,
+	Executor& executor,
 	AllocatorType& allocator,
 	Tree* tree,
 	Node* node,
 	StateFrame* parent) :
+	executor(&executor),
 	allocator(&allocator),
 	parent(parent),
 	tree(tree),
 	node(node),
-	state(mashina),
-	children(Children::construct(mashina))
+	state(executor.mashina()),
+	children(Children::construct(executor.mashina()))
 {
 	if (node == nullptr)
 	{
@@ -352,6 +374,10 @@ bmashina::BasicExecutor<M>::StateFrame::StateFrame(
 template <typename M>
 bmashina::BasicExecutor<M>::StateFrame::~StateFrame()
 {
+	if (node != nullptr)
+	{
+		node->drop(*executor);
+	}
 	shrink(0);
 }
 

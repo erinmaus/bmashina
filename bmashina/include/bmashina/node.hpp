@@ -42,6 +42,7 @@ namespace bmashina
 		bool attached() const;
 
 		void visit(Executor& executor);
+		void drop(Executor& executor);
 		virtual Status update(Executor& executor);
 
 		BasicNode& operator =(const BasicNode& other) = delete;
@@ -51,6 +52,9 @@ namespace bmashina
 		const Tree& tree() const;
 
 		virtual void activated(Executor& executor);
+		virtual void deactivated(Executor& executor);
+
+		void deactivate(Executor& executor);
 
 	private:
 		Tree* tree_instance = nullptr;
@@ -123,6 +127,16 @@ void bmashina::BasicNode<M>::visit(Executor& executor)
 }
 
 template <typename M>
+void bmashina::BasicNode<M>::drop(Executor& executor)
+{
+	if (executor.state().has(visited))
+	{
+		deactivated(executor);
+		executor.state().unset(visited);
+	}
+}
+
+template <typename M>
 bmashina::Status bmashina::BasicNode<M>::update(Executor& executor)
 {
 	return Status::success;
@@ -132,6 +146,18 @@ template <typename M>
 void bmashina::BasicNode<M>::activated(Executor& executor)
 {
 	// Nothing.
+}
+
+template <typename M>
+void bmashina::BasicNode<M>::deactivated(Executor& executor)
+{
+	// Nothing.
+}
+
+template <typename M>
+void bmashina::BasicNode<M>::deactivate(Executor& executor)
+{
+	executor.state().unset(visited);
 }
 
 #endif
