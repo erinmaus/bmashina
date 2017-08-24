@@ -116,7 +116,13 @@ bmashina::BasicState<M>::~BasicState()
 template <typename M>
 bool bmashina::BasicState<M>::has(const detail::BaseReference& reference) const
 {
-	return values.count(&reference) != 0;
+	auto iter = values.find(&reference);
+	if (iter == values.end() || iter->second == nullptr)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 template <typename M>
@@ -124,17 +130,24 @@ template <typename R>
 typename R::Type
 bmashina::BasicState<M>::get(const R& reference) const
 {
-	assert(values.count(&reference) != 0);
+	auto iter = values.find(&reference);
+
+	assert(iter != values.end());
+	assert(iter->second != nullptr);
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (values.count(&reference) == 0)
+	if (iter == values.end())
 	{
 		throw std::runtime_error("property not in state");
 	}
+
+	if (iter->second == nullptr)
+	{
+		throw std::runtime_error("property no longer in state");
+	}
 #endif
 
-	auto property = values.find(&reference)->second;
-	return (static_cast<Property<typename R::Type>*>(property))->get();
+	return (static_cast<Property<typename R::Type>*>(iter->second))->get();
 }
 
 template <typename M>
@@ -143,7 +156,7 @@ typename R::Type
 bmashina::BasicState<M>::get(const R& reference, const typename R::Type& default_value) const
 {
 	auto value = values.find(&reference);
-	if (value == values.end())
+	if (value == values.end() || value->second == nullptr)
 	{
 		return default_value;
 	}
@@ -171,11 +184,9 @@ template <typename R>
 void bmashina::BasicState<M>::set(const R& reference, const Property<typename R::Type>& value)
 {
 	remove_value(&reference);
-	auto iter = values.find(&reference);
-	assert(values.count(&reference) == 0);
 
 	auto property = BasicAllocator::create<Property<typename R::Type>>(allocator, value);
-	values.emplace(&reference, property);
+	values[&reference] = property;
 
 #ifndef BMASHINA_DISABLE_DEBUG
 	auto printer = [](Mashina& mashina, const State& state, const detail::BaseReference* reference)
@@ -198,10 +209,16 @@ void bmashina::BasicState<M>::clear()
 {
 	for (auto& value: values)
 	{
-		BasicAllocator::destroy<detail::BaseProperty>(allocator, value.second);
+		if (value.second != nullptr)
+		{
+			BasicAllocator::destroy<detail::BaseProperty>(allocator, value.second);
+		}
 	}
 	values.clear();
 	tags.clear();
+#ifndef BMASHINA_DISABLE_DEBUG
+	value_printers.clear();
+#endif
 }
 
 template <typename M>
@@ -226,7 +243,7 @@ void bmashina::BasicState<M>::copy(
 		return;
 	}
 
-	if (source.has(reference))
+	if (source.values.count(&reference) != 0)
 	{
 		auto value = source.values.find(&reference);
 		auto tag = source.tags.find(&reference);
@@ -235,7 +252,10 @@ void bmashina::BasicState<M>::copy(
 		assert(tag != source.tags.end());
 
 		destination.remove_value(&reference);
-		destination.values[&reference] = value->second->clone(destination.allocator);
+		if (value->second != nullptr)
+		{
+			destination.values[&reference] = value->second->clone(destination.allocator);
+		}
 		destination.tags[&reference] = tag->second;
 
 #ifndef BMASHINA_DISABLE_DEBUG
@@ -258,7 +278,7 @@ void bmashina::BasicState<M>::copy(
 		return;
 	}
 
-	if (source.has(source_reference))
+	if (source.values.count(&source_reference) != 0)
 	{
 		auto source_value = source.values.find(&source_reference);
 		auto source_tag = source.tags.find(&source_reference);
@@ -267,7 +287,10 @@ void bmashina::BasicState<M>::copy(
 		assert(source_tag != source.tags.end());
 
 		destination.remove_value(&destination_reference);
-		destination.values[&destination_reference] = source_value->second->clone(destination.allocator);
+		if (source_value->second != nullptr)
+		{
+			destination.values[&destination_reference] = source_value->second->clone(destination.allocator);
+		}
 		destination.tags[&destination_reference] = source_tag->second;
 
 #ifndef BMASHINA_DISABLE_DEBUG
@@ -282,17 +305,10 @@ template <typename M>
 void bmashina::BasicState<M>::remove_value(const detail::BaseReference* key)
 {
 	auto iter = values.find(key);
-	if (iter != values.end())
+	if (iter != values.end() && iter->second != nullptr)
 	{
 		BasicAllocator::destroy<detail::BaseProperty>(allocator, iter->second);
-		values.erase(iter);
-
-		assert(tags.count(key) != 0);
-		tags.erase(key);
-
-#ifndef BMASHINA_DISABLE_DEBUG
-		value_printers.erase(key);
-#endif
+		iter->second = nullptr;
 	}
 }
 
@@ -304,6 +320,11 @@ void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback) co
 {
 	for (auto& i: values)
 	{
+		if (i.second == nullptr)
+		{
+			continue;
+		}
+
 		assert(value_printers.count(i.first) != 0);
 
 		auto reference = i.first;
