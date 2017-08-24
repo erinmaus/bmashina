@@ -72,6 +72,8 @@ namespace bmashina
 		template <typename N, typename... Arguments>
 		N& root(Arguments&&... arguments);
 
+		Node& root() const;
+
 		template <typename N, typename... Arguments>
 		N& child(Node& parent, Arguments&&... arguments);
 		Node& child(Node& parent, Tree& tree);
@@ -189,8 +191,8 @@ bmashina::BasicTree<M>::BasicTree(Mashina& mashina) :
 	channels(ChannelSet::construct(mashina)),
 	channel_assignments(ChannelAssignments::construct(mashina)),
 	channel_nodes(ChannelNodes::construct(mashina)),
-	children(NodeChildren::construct(mashina)),
 	empty_node_list(NodeList::construct(mashina)),
+	children(NodeChildren::construct(mashina)),
 	node_inputs(NodeWires::construct(mashina)),
 	node_outputs(NodeWires::construct(mashina)),
 	inputs(ReferenceList::construct(mashina)),
@@ -227,6 +229,22 @@ N& bmashina::BasicTree<M>::root(Arguments&&... arguments)
 	root_node = result;
 
 	return *result;
+}
+
+template <typename M>
+typename bmashina::BasicTree<M>::Node&
+bmashina::BasicTree<M>::root() const
+{
+	assert(root_node != nullptr);
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (root_node == nullptr)
+	{
+		throw std::runtime_error("tree is empty");
+	}
+#endif
+
+	return *root_node;
 }
 
 template <typename M>
@@ -431,6 +449,7 @@ bmashina::Status bmashina::BasicTree<M>::update(Executor& executor, Node& node)
 	Status status;
 	before_update(executor, node);
 	{
+		node.visit(executor);
 		status = node.update(executor);
 	}
 	after_update(executor, node, status);
@@ -570,8 +589,6 @@ bmashina::BasicTree<M>::ChannelProxyNode::ChannelProxyNode(const Channel& channe
 template <typename M>
 bmashina::Status bmashina::BasicTree<M>::ChannelProxyNode::update(Executor& executor)
 {
-	Status status = bmashina::Status::failure;
-
 	auto& parent_tree = this->tree();
 	auto iter = parent_tree.channel_assignments.find(channel);
 	if (iter != parent_tree.channel_assignments.end() && !iter->second->empty())
