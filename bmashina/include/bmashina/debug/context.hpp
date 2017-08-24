@@ -110,7 +110,7 @@ template <typename M>
 bmashina::BasicContext<M>::BasicContext(Tree& tree, Executor& executor) :
 	tree_instance(&tree),
 	executor(&executor),
-	step([this](auto& push) { execute(*this, push); })
+	step([this](auto& push) { this->execute(*this, push); })
 {
 	pull();
 }
@@ -145,7 +145,6 @@ bmashina::BasicContext<M>::tree() const
 template <typename M>
 bmashina::Status bmashina::BasicContext<M>::status() const
 {
-	assert(!done());
 	return current.status;
 }
 
