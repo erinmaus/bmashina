@@ -158,6 +158,7 @@ template <typename M>
 void bmashina::BasicNode<M>::deactivate(Executor& executor)
 {
 	executor.state().unset(visited);
+	deactivated(executor);
 }
 
 #endif
