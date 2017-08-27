@@ -154,15 +154,15 @@ void bmashina::BasicExecutor<M>::reset()
 	assert(current_depth == 0);
 
 #ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (current_depth == 0)
+	if (current_depth != 0)
 	{
 		throw std::runtime_error("cannot reset while executing");
 	}
 #endif
 
 	assert(current_frame != nullptr);
-	this->frames->shrink(0);
-	this->current_frame = this->frames;
+	frames->shrink(0);
+	current_frame = frames;
 }
 
 template <typename M>
@@ -301,10 +301,18 @@ void bmashina::BasicExecutor<M>::leave_frame(Tree& tree, Node* node)
 	assert(current_frame->tree == &tree);
 	assert(current_frame->node == node);
 
+	current_frame->shrink(current_frame->index);
+	current_frame->index = 0;
+
 	auto previous_frame = current_frame;
 	current_frame = current_frame->parent;
 
 	State::copy(previous_frame->state, current_frame->state);
+
+	if (current_depth == 0)
+	{
+		current_frame->index = 0;
+	}
 }
 
 template <typename M>
