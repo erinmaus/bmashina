@@ -79,7 +79,7 @@ namespace bmashina
 		Node& child(Node& parent, Tree& tree);
 		void child(Node& parent, const Channel& channel);
 
-		void assign(const Channel& channel, Tree& tree);
+		Node& assign(const Channel& channel, Tree& tree);
 		bool assigned(const Channel& channel) const;
 		void unassign(const Channel& channel);
 
@@ -301,7 +301,8 @@ bmashina::BasicTree<M>::child(Node& parent, Tree& tree)
 }
 
 template <typename M>
-void bmashina::BasicTree<M>::assign(const Channel& channel, Tree& tree)
+typename bmashina::BasicTree<M>::Node&
+bmashina::BasicTree<M>::assign(const Channel& channel, Tree& tree)
 {
 	assert(has(channel));
 	assert(compatible(tree));
@@ -324,6 +325,8 @@ void bmashina::BasicTree<M>::assign(const Channel& channel, Tree& tree)
 	}
 
 	channel_assignments.emplace(channel, &tree);
+
+	return *channel_nodes.find(channel)->second;
 }
 
 template <typename M>
