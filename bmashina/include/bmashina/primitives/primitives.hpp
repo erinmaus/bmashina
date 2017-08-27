@@ -9,7 +9,10 @@
 #ifndef BMASHINA_PRIMITIVES_PRIMITIVES_HPP
 #define BMASHINA_PRIMITIVES_PRIMITIVES_HPP
 
+#include "bmashina/primitives/failure.hpp"
+#include "bmashina/primitives/invert.hpp"
 #include "bmashina/primitives/sequence.hpp"
 #include "bmashina/primitives/selector.hpp"
+#include "bmashina/primitives/success.hpp"
 
 #endif
