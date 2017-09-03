@@ -50,6 +50,7 @@ namespace bmashina
 		void enter(Node& node);
 		void leave(Node& node, Status status);
 		Status update(Node& node);
+		void visit(Node& node);
 
 		Mashina* operator ->();
 		Mashina& operator *();
@@ -163,6 +164,7 @@ void bmashina::BasicExecutor<M>::reset()
 	assert(current_frame != nullptr);
 	frames->shrink(0);
 	current_frame = frames;
+	current_frame->state.clear();
 }
 
 template <typename M>
@@ -255,6 +257,23 @@ bmashina::Status bmashina::BasicExecutor<M>::update(Node& node)
 #endif
 
 	return current_frame->tree->update(*this, node);
+}
+
+template <typename M>
+void bmashina::BasicExecutor<M>::visit(Node& node)
+{
+	assert(current_depth > 0);
+
+#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
+	if (current_depth == 0)
+	{
+		throw std::runtime_error("tree is not executing");
+	}
+#endif
+
+	enter(node);
+	node.visit(*this);
+	leave(node, Status::none);
 }
 
 template <typename M>
