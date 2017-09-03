@@ -47,10 +47,10 @@ namespace bmashina
 
 		BasicNode& operator =(const BasicNode& other) = delete;
 
-	protected:
 		Tree& tree();
 		const Tree& tree() const;
 
+	protected:
 		virtual void activated(Executor& executor);
 		virtual void deactivated(Executor& executor);
 
