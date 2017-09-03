@@ -61,6 +61,7 @@ namespace bmashina
 		typedef V Value;
 
 		Property() = default;
+		Property(const Value& value);
 		Property(Value* value);
 		Property(const std::shared_ptr<Value>& value);
 		~Property() = default;
@@ -160,10 +161,18 @@ bmashina::Property<V>::operator const Value&() const
 
 #ifndef BMASHINA_DISABLE_STL_CONTAINERS
 template <typename V>
+bmashina::Property<V*>::Property(const Value& value) :
+	value(std::make_shared<Value>(value))
+{
+	// Nothing.
+}
+
+template <typename V>
 bmashina::Property<V*>::Property(Value* value) : value(value)
 {
 	// Nothing.
 }
+
 template <typename V>
 bmashina::Property<V*>::Property(const std::shared_ptr<Value>& value) : value(value)
 {
