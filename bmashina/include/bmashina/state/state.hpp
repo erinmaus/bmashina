@@ -25,11 +25,15 @@
 namespace bmashina
 {
 	template <typename M>
+	class BasicTree;
+
+	template <typename M>
 	class BasicState
 	{
 	public:
 		typedef M Mashina;
 		typedef BasicState<M> State;
+		typedef BasicTree<M> Tree;
 
 		BasicState(Mashina& mashina);
 		BasicState(const State& other) = delete;
@@ -48,13 +52,15 @@ namespace bmashina
 		template <typename R>
 		void set(const R& reference, const Property<typename R::Type>& value);
 
-		template <typename R>
-		void reserve(const R& reference);
+		void reserve(const detail::BaseReference& reference);
 
 		void unset(const detail::BaseReference& reference);
 		void clear();
 
 		State& operator =(const State& other) = delete;
+
+		void set_locals_key(const void* key);
+		void invalidate_locals(const void* key);
 
 		static void copy(const State& source, State& destination);
 		static void copy(
@@ -83,16 +89,21 @@ namespace bmashina
 		typename ValuePrinterMap::Type value_printers;
 #endif
 
+		const void* current_locals_key = nullptr;
+		typedef UnorderedSet<Mashina, const detail::BaseReference*> LocalSet;
+		typedef UnorderedMap<Mashina, const void*, typename LocalSet::Type> LocalMap;
+		typename LocalMap::Type locals;
+
 		typedef UnorderedMap<Mashina, const detail::BaseReference*, detail::BaseProperty*> ValueMap;
 		typename ValueMap::Type values;
+
+		template <typename V>
+		void set_value(const Reference<V>& reference, const Property<V>& value);
+
+		template <typename V>
+		void set_value(const Local<V>& local, const Property<V>& value);
+
 		void remove_value(const detail::BaseReference* key);
-
-		typedef UnorderedMap<Mashina, const detail::BaseReference*, detail::BaseReference::Tag> TagMap;
-		typename TagMap::Type tags;
-
-		typedef UnorderedMap<Mashina, const detail::BaseReference*, const detail::BaseReference*> AliasMap;
-		typename AliasMap::Type aliases;
-		const detail::BaseReference* resolve_alias(const detail::BaseReference* reference) const;
 	};
 }
 
@@ -100,9 +111,8 @@ template <typename M>
 bmashina::BasicState<M>::BasicState(Mashina& mashina) :
 	mashina(&mashina),
 	allocator(mashina),
-	values(ValueMap::construct(mashina)),
-	tags(TagMap::construct(mashina)),
-	aliases(AliasMap::construct(mashina))
+	locals(LocalMap::construct(mashina)),
+	values(ValueMap::construct(mashina))
 {
 	// Nothing.
 }
@@ -167,10 +177,12 @@ bmashina::BasicState<M>::get(const R& reference, const typename R::Type& default
 }
 
 template <typename M>
-template <typename R>
-void bmashina::BasicState<M>::reserve(const R& reference)
+void bmashina::BasicState<M>::reserve(const detail::BaseReference& reference)
 {
-	tags[&reference] = R::TAG;
+	if (values.count(&reference) == 0)
+	{
+		values[&reference] = nullptr;
+	}
 }
 
 template <typename M>
@@ -183,9 +195,16 @@ template <typename M>
 template <typename R>
 void bmashina::BasicState<M>::set(const R& reference, const Property<typename R::Type>& value)
 {
+	set_value<typename R::Type>(reference, value);
+}
+
+template <typename M>
+template <typename V>
+void bmashina::BasicState<M>::set_value(const Reference<V>& reference, const Property<V>& value)
+{
 	remove_value(&reference);
 
-	auto property = BasicAllocator::create<Property<typename R::Type>>(allocator, value);
+	auto property = BasicAllocator::create<Property<V>>(allocator, value);
 	values[&reference] = property;
 
 #ifndef BMASHINA_DISABLE_DEBUG
@@ -194,14 +213,36 @@ void bmashina::BasicState<M>::set(const R& reference, const Property<typename R:
 		auto value = state.values.find(reference);
 		assert(value != state.values.end());
 
-		auto property = static_cast<Property<typename R::Type>*>(value->second);
-		return PropertyPrinter<Mashina, typename R::Type>::print(mashina, *property);
+		auto property = static_cast<Property<V>*>(value->second);
+		return PropertyPrinter<Mashina, V>::print(mashina, *property);
 	};
 
 	value_printers[&reference] = printer;
 #endif
+}
 
-	reserve<R>(reference);
+template <typename M>
+template <typename V>
+void bmashina::BasicState<M>::set_value(const Local<V>& local, const Property<V>& value)
+{
+	remove_value(&local);
+
+	auto property = BasicAllocator::create<Property<V>>(allocator, value);
+	values[&local] = property;
+	locals[current_locals_key].insert(&local);
+
+#ifndef BMASHINA_DISABLE_DEBUG
+	auto printer = [](Mashina& mashina, const State& state, const detail::BaseReference* local)
+	{
+		auto value = state.values.find(local);
+		assert(value != state.values.end());
+
+		auto property = static_cast<Property<V>*>(value->second);
+		return PropertyPrinter<Mashina, V>::print(mashina, *property);
+	};
+
+	value_printers[&local] = printer;
+#endif
 }
 
 template <typename M>
@@ -215,10 +256,38 @@ void bmashina::BasicState<M>::clear()
 		}
 	}
 	values.clear();
-	tags.clear();
+	locals.clear();
 #ifndef BMASHINA_DISABLE_DEBUG
 	value_printers.clear();
 #endif
+}
+
+template <typename M>
+void bmashina::BasicState<M>::set_locals_key(const void* key)
+{
+	current_locals_key = key;
+	if (locals.count(key) == 0)
+	{
+		locals.emplace(key, LocalSet::construct(*mashina));
+	}
+}
+
+template <typename M>
+void bmashina::BasicState<M>::invalidate_locals(const void* key)
+{
+	auto iter = locals.find(key);
+	if (iter != locals.end())
+	{
+		for (auto i: iter->second)
+		{
+			values.erase(i);
+#ifndef BMASHINA_DISABLE_DEBUG
+			value_printers.erase(i);
+#endif
+		}
+
+		locals.erase(iter);
+	}
 }
 
 template <typename M>
@@ -246,22 +315,25 @@ void bmashina::BasicState<M>::copy(
 	if (source.values.count(&reference) != 0)
 	{
 		auto value = source.values.find(&reference);
-		auto tag = source.tags.find(&reference);
 
 		assert(value != source.values.end());
-		assert(tag != source.tags.end());
 
 		destination.remove_value(&reference);
 		if (value->second != nullptr)
 		{
 			destination.values[&reference] = value->second->clone(destination.allocator);
 		}
-		destination.tags[&reference] = tag->second;
 
 #ifndef BMASHINA_DISABLE_DEBUG
 		auto printer = source.value_printers.find(&reference);
-		assert(printer != source.value_printers.end());
-		destination.value_printers[&reference] = printer->second;
+		if (printer == source.value_printers.end())
+		{
+			destination.value_printers.erase(&reference);
+		}
+		else
+		{
+			destination.value_printers[&reference] = printer->second;
+		}
 #endif
 	}
 }
@@ -281,22 +353,25 @@ void bmashina::BasicState<M>::copy(
 	if (source.values.count(&source_reference) != 0)
 	{
 		auto source_value = source.values.find(&source_reference);
-		auto source_tag = source.tags.find(&source_reference);
 
 		assert(source_value != source.values.end());
-		assert(source_tag != source.tags.end());
 
 		destination.remove_value(&destination_reference);
 		if (source_value->second != nullptr)
 		{
 			destination.values[&destination_reference] = source_value->second->clone(destination.allocator);
 		}
-		destination.tags[&destination_reference] = source_tag->second;
 
 #ifndef BMASHINA_DISABLE_DEBUG
-		auto source_printer = source.value_printers.find(&source_reference);
-		assert(source_printer != source.value_printers.end());
-		destination.value_printers[&destination_reference] = source_printer->second;
+		auto printer = source.value_printers.find(&source_reference);
+		if (printer == source.value_printers.end())
+		{
+			destination.value_printers.erase(&destination_reference);
+		}
+		else
+		{
+			destination.value_printers[&destination_reference] = printer->second;
+		}
 #endif
 	}
 }
@@ -308,7 +383,8 @@ void bmashina::BasicState<M>::remove_value(const detail::BaseReference* key)
 	if (iter != values.end() && iter->second != nullptr)
 	{
 		BasicAllocator::destroy<detail::BaseProperty>(allocator, iter->second);
-		iter->second = nullptr;
+		value_printers.erase(key);
+		values.erase(iter);
 	}
 }
 
@@ -320,16 +396,26 @@ void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback) co
 {
 	for (auto& i: values)
 	{
-		if (i.second == nullptr)
-		{
-			continue;
-		}
-
-		assert(value_printers.count(i.first) != 0);
-
 		auto reference = i.first;
-		auto& printer = value_printers.find(i.first)->second;
-		auto value = printer(*mashina, *this, i.first);
+		typename String<M>::Type value;
+		{
+			auto iter = value_printers.find(reference);
+			if (iter != value_printers.end() && i.second != nullptr )
+			{
+				value = iter->second(*mashina, *this, reference);
+			}
+			else
+			{
+				if (i.second == nullptr)
+				{
+					value = String<M>::construct(*mashina, "(null)");
+				}
+				else
+				{
+					value = String<M>::construct(*mashina, "(unknown)");
+				}
+			}
+		}
 
 		if (reference->name == nullptr)
 		{

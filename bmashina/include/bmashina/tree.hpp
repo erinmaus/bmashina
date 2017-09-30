@@ -43,10 +43,10 @@ namespace bmashina
 		~BasicTree();
 
 		template <typename V, typename... Arguments>
-		const Reference<V>& local(Arguments&&... arguments);
+		const Local<V>& local(Arguments&&... arguments);
 
 		template <typename V>
-		const Reference<V>& constant(const Property<V>& value);
+		const Local<V>& constant(const Property<V>& value);
 
 		void input(const detail::BaseReference& referece);
 		void input(
@@ -68,6 +68,9 @@ namespace bmashina
 			const detail::BaseReference& to);
 
 		bool compatible(const Tree& other) const;
+
+		const State& state() const;
+		State& state();
 
 		template <typename N, typename... Arguments>
 		N& root(Arguments&&... arguments);
@@ -418,28 +421,17 @@ bmashina::Status bmashina::BasicTree<M>::execute(Executor& executor)
 	}
 
 	Status result;
-	auto& before_state = executor.state();
 	executor.enter(*this);
-	auto& after_state = executor.state();
 
+	auto& state = executor.state();
 	for (auto constant: constants)
 	{
-		State::copy(constant_values, after_state, *constant);
-	}
-
-	for (auto input: inputs)
-	{
-		State::copy(before_state, after_state, *input);
+		State::copy(constant_values, state, *constant);
 	}
 
 	result = executor.update(*root_node);
 
 	executor.leave(*this);
-
-	for (auto output: outputs)
-	{
-		State::copy(after_state, before_state, *output);
-	}
 
 	return result;
 }
@@ -463,9 +455,8 @@ bmashina::Status bmashina::BasicTree<M>::update(Executor& executor, Node& node)
 template <typename M>
 void bmashina::BasicTree<M>::before_update(Executor& executor, Node& node)
 {
-	auto& before_state = executor.state();
 	executor.enter(node);
-	auto& after_state = executor.state();
+	auto& state = executor.state();
 
 	auto iter = node_inputs.find(&node);
 	if (iter != node_inputs.end())
@@ -476,7 +467,7 @@ void bmashina::BasicTree<M>::before_update(Executor& executor, Node& node)
 			auto from = std::get<0>(i);
 			auto to = std::get<1>(i);
 
-			State::copy(before_state, after_state, *from, *to);
+			State::copy(state, state, *from, *to);
 		}
 	}
 }
@@ -484,9 +475,8 @@ void bmashina::BasicTree<M>::before_update(Executor& executor, Node& node)
 template <typename M>
 void bmashina::BasicTree<M>::after_update(Executor& executor, Node& node, Status status)
 {
-	auto& before_state = executor.state();
+	auto& state = executor.state();
 	executor.leave(node, status);
-	auto& after_state = executor.state();
 
 	auto outputs_iter = node_outputs.find(&node);
 	if (outputs_iter != node_outputs.end())
@@ -497,8 +487,8 @@ void bmashina::BasicTree<M>::after_update(Executor& executor, Node& node, Status
 			auto from = std::get<0>(i);
 			auto to = std::get<1>(i);
 
-			State::copy(before_state, after_state, *from, *to);
-			after_state.unset(*from);
+			State::copy(state, state, *from, *to);
+			state.unset(*from);
 		}
 	}
 
@@ -509,7 +499,7 @@ void bmashina::BasicTree<M>::after_update(Executor& executor, Node& node, Status
 		for (auto i: inputs)
 		{
 			auto to = std::get<1>(i);
-			after_state.unset(*to);
+			state.unset(*to);
 		}
 	}
 }
@@ -618,9 +608,9 @@ bmashina::Status bmashina::BasicTree<M>::TreeProxyNode::update(Executor& executo
 
 template <typename M>
 template <typename V, typename... Arguments>
-const bmashina::Reference<V>& bmashina::BasicTree<M>::local(Arguments&&... arguments)
+const bmashina::Local<V>& bmashina::BasicTree<M>::local(Arguments&&... arguments)
 {
-	auto reference = BasicAllocator::template create<Reference<V>>(allocator, std::forward<Arguments>(arguments)...);
+	auto reference = BasicAllocator::template create<Local<V>>(allocator, std::forward<Arguments>(arguments)...);
 	locals.insert(reference);
 
 	return *reference;
@@ -628,9 +618,9 @@ const bmashina::Reference<V>& bmashina::BasicTree<M>::local(Arguments&&... argum
 
 template <typename M>
 template <typename V>
-const bmashina::Reference<V>& bmashina::BasicTree<M>::constant(const Property<V>& value)
+const bmashina::Local<V>& bmashina::BasicTree<M>::constant(const Property<V>& value)
 {
-	auto reference = BasicAllocator::template create<Reference<V>>(allocator);
+	auto reference = BasicAllocator::template create<Local<V>>(allocator);
 	locals.insert(reference);
 	constants.insert(reference);
 	constant_values.set(*reference, value);

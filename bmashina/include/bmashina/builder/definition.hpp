@@ -44,12 +44,10 @@ namespace bmashina
 	protected:
 		void add_property(
 			const Key& key,
-			const detail::BaseReference::Tag* tag,
 			const detail::BaseReference* property);
 
 	private:
-		typedef std::tuple<const detail::BaseReference*, const detail::BaseReference::Tag*> PropertyTagTuple;
-		typedef UnorderedMap<Mashina, Key, PropertyTagTuple> PropertyMap;
+		typedef UnorderedMap<Mashina, Key, const detail::BaseReference*> PropertyMap;
 		typename PropertyMap::Type properties;
 	};
 }
@@ -100,7 +98,6 @@ bmashina::BasicNodeDictionaryDefinition<M, K>::get_property(const Key& key) cons
 template <typename M, typename K>
 void bmashina::BasicNodeDictionaryDefinition<M, K>::add_property(
 	const Key& key,
-	const detail::BaseReference::Tag* tag,
 	const detail::BaseReference* property)
 {
 	assert(!has_property(key));
@@ -112,8 +109,7 @@ void bmashina::BasicNodeDictionaryDefinition<M, K>::add_property(
 	}
 #endif
 
-	auto property_tag = std::make_tuple(property, tag);
-	properties[key] = property_tag;
+	properties[key] = property;
 }
 
 #endif

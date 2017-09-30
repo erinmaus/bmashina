@@ -58,7 +58,7 @@ namespace bmashina
 
 	private:
 		Tree* tree_instance = nullptr;
-		Reference<bool> visited = Reference<bool>("_node_visited");
+		Local<bool> visited = Local<bool>("_node_visited");
 	};
 }
 

@@ -94,8 +94,6 @@ namespace bmashina
 			StateFrame* parent;
 			Tree* tree;
 			Node* node;
-			State state;
-			State* tree_state;
 			std::size_t index = 0;
 
 			void shrink(std::size_t new_index);
@@ -103,6 +101,7 @@ namespace bmashina
 			typedef Vector<Mashina, StateFrame*> Children;
 			typename Children::Type children;
 		};
+		State root_state;
 		StateFrame* frames = nullptr;
 		StateFrame* current_frame = nullptr;
 
@@ -122,6 +121,7 @@ template <typename M>
 bmashina::BasicExecutor<M>::BasicExecutor(Mashina& mashina) :
 	mashina_instance(&mashina),
 	allocator(mashina),
+	root_state(mashina),
 	frames(BasicAllocator::create<StateFrame>(allocator, *this, allocator, nullptr, nullptr)),
 	current_frame(frames)
 {
@@ -131,6 +131,7 @@ bmashina::BasicExecutor<M>::BasicExecutor(Mashina& mashina) :
 template <typename M>
 bmashina::BasicExecutor<M>::~BasicExecutor()
 {
+	reset();
 	BasicAllocator::destroy(allocator, frames);
 }
 
@@ -146,7 +147,7 @@ typename bmashina::BasicExecutor<M>::State&
 bmashina::BasicExecutor<M>::state()
 {
 	assert(current_frame != nullptr);
-	return current_frame->state;
+	return root_state;
 }
 
 template <typename M>
@@ -164,7 +165,7 @@ void bmashina::BasicExecutor<M>::reset()
 	assert(current_frame != nullptr);
 	frames->shrink(0);
 	current_frame = frames;
-	current_frame->state.clear();
+	root_state.clear();
 }
 
 template <typename M>
@@ -283,7 +284,6 @@ void bmashina::BasicExecutor<M>::push_frame(Tree& tree, Node* node)
 	++current_frame->index;
 	++current_depth;
 
-	auto previous_frame = current_frame;
 	if (index < current_frame->children.size())
 	{
 		auto next_tree = current_frame->children[index]->tree;
@@ -308,7 +308,7 @@ void bmashina::BasicExecutor<M>::push_frame(Tree& tree, Node* node)
 		current_frame = frame;
 	}
 
-	State::copy(previous_frame->state, current_frame->state);
+	root_state.set_locals_key(current_frame->tree);
 }
 
 template <typename M>
@@ -323,15 +323,14 @@ void bmashina::BasicExecutor<M>::leave_frame(Tree& tree, Node* node)
 	current_frame->shrink(current_frame->index);
 	current_frame->index = 0;
 
-	auto previous_frame = current_frame;
 	current_frame = current_frame->parent;
-
-	State::copy(previous_frame->state, current_frame->state);
 
 	if (current_depth == 0)
 	{
 		current_frame->index = 0;
 	}
+
+	root_state.set_locals_key(current_frame->tree);
 }
 
 template <typename M>
@@ -385,23 +384,22 @@ bmashina::BasicExecutor<M>::StateFrame::StateFrame(
 	parent(parent),
 	tree(tree),
 	node(node),
-	state(executor.mashina()),
 	children(Children::construct(executor.mashina()))
 {
-	if (node == nullptr)
-	{
-		tree_state = &state;
-	}
-	else
-	{
-		tree_state = parent->tree_state;
-	}
+	// Nothing.
 }
 
 template <typename M>
 bmashina::BasicExecutor<M>::StateFrame::~StateFrame()
 {
-	if (node != nullptr)
+	if (node == nullptr)
+	{
+		if (tree != nullptr)
+		{
+			executor->state().invalidate_locals(tree);
+		}
+	}
+	else
 	{
 		node->drop(*executor);
 	}
