@@ -621,7 +621,6 @@ template <typename V>
 const bmashina::Local<V>& bmashina::BasicTree<M>::constant(const Property<V>& value)
 {
 	auto reference = BasicAllocator::template create<Local<V>>(allocator);
-	locals.insert(reference);
 	constants.insert(reference);
 	constant_values.set(*reference, value);
 
