@@ -92,7 +92,8 @@ namespace bmashina
 		const void* current_locals_key = nullptr;
 		typedef UnorderedSet<Mashina, const detail::BaseReference*> LocalSet;
 		typedef UnorderedMap<Mashina, const void*, typename LocalSet::Type> LocalMap;
-		typename LocalMap::Type locals;
+		typename LocalMap::Type locals_by_key;
+		typename LocalSet::Type locals;
 
 		typedef UnorderedMap<Mashina, const detail::BaseReference*, detail::BaseProperty*> ValueMap;
 		typename ValueMap::Type values;
@@ -111,10 +112,11 @@ template <typename M>
 bmashina::BasicState<M>::BasicState(Mashina& mashina) :
 	mashina(&mashina),
 	allocator(mashina),
-	locals(LocalMap::construct(mashina)),
+	locals_by_key(LocalMap::construct(mashina)),
+	locals(LocalSet::construct(mashina)),
 	values(ValueMap::construct(mashina))
 {
-	// Nothing.
+	set_locals_key(nullptr);
 }
 
 template <typename M>
@@ -229,7 +231,8 @@ void bmashina::BasicState<M>::set_value(const Local<V>& local, const Property<V>
 
 	auto property = BasicAllocator::create<Property<V>>(allocator, value);
 	values[&local] = property;
-	locals[current_locals_key].insert(&local);
+	locals_by_key[current_locals_key].insert(&local);
+	locals.insert(&local);
 
 #ifndef BMASHINA_DISABLE_DEBUG
 	auto printer = [](Mashina& mashina, const State& state, const detail::BaseReference* local)
@@ -256,6 +259,7 @@ void bmashina::BasicState<M>::clear()
 		}
 	}
 	values.clear();
+	locals_by_key.clear();
 	locals.clear();
 #ifndef BMASHINA_DISABLE_DEBUG
 	value_printers.clear();
@@ -266,27 +270,28 @@ template <typename M>
 void bmashina::BasicState<M>::set_locals_key(const void* key)
 {
 	current_locals_key = key;
-	if (locals.count(key) == 0)
+	if (locals_by_key.count(key) == 0)
 	{
-		locals.emplace(key, LocalSet::construct(*mashina));
+		locals_by_key.emplace(key, LocalSet::construct(*mashina));
 	}
 }
 
 template <typename M>
 void bmashina::BasicState<M>::invalidate_locals(const void* key)
 {
-	auto iter = locals.find(key);
-	if (iter != locals.end())
+	auto iter = locals_by_key.find(key);
+	if (iter != locals_by_key.end())
 	{
 		for (auto i: iter->second)
 		{
+			locals.erase(i);
 			values.erase(i);
 #ifndef BMASHINA_DISABLE_DEBUG
 			value_printers.erase(i);
 #endif
 		}
 
-		locals.erase(iter);
+		locals_by_key.erase(iter);
 	}
 }
 
@@ -315,13 +320,17 @@ void bmashina::BasicState<M>::copy(
 	if (source.values.count(&reference) != 0)
 	{
 		auto value = source.values.find(&reference);
-
 		assert(value != source.values.end());
 
 		destination.remove_value(&reference);
 		if (value->second != nullptr)
 		{
 			destination.values[&reference] = value->second->clone(destination.allocator);
+			if (source.locals.count(&reference) != 0)
+			{
+				destination.locals.insert(&reference);
+				destination.locals_by_key[destination.current_locals_key].insert(&reference);
+			}
 		}
 
 #ifndef BMASHINA_DISABLE_DEBUG
