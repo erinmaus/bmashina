@@ -22,7 +22,7 @@ namespace bmashina
 	class BasicDecorator : public BasicNode<M>
 	{
 	public:
-		using typename BasicNode<M>::Node;
+		typedef BasicNode<M> Node;
 		using typename BasicNode<M>::Executor;
 
 		BasicDecorator() = default;
