@@ -75,7 +75,7 @@ namespace bmashina
 #endif
 
 	private:
-		Mashina* mashina_instance;
+		Mashina mashina_instance;
 
 		typedef typename Allocator<Mashina>::Type AllocatorType;
 		AllocatorType allocator;
@@ -120,7 +120,7 @@ namespace bmashina
 
 template <typename M>
 bmashina::BasicExecutor<M>::BasicExecutor(Mashina& mashina) :
-	mashina_instance(&mashina),
+	mashina_instance(mashina),
 	allocator(mashina),
 	root_state(mashina),
 	frames(BasicAllocator::create<StateFrame>(allocator, *this, allocator, nullptr, nullptr)),
@@ -140,7 +140,7 @@ template <typename M>
 typename bmashina::BasicExecutor<M>::Mashina&
 bmashina::BasicExecutor<M>::mashina()
 {
-	return *mashina_instance;
+	return mashina_instance;
 }
 
 template <typename M>

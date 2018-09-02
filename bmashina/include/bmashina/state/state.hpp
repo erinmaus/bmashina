@@ -74,11 +74,11 @@ namespace bmashina
 #ifndef BMASHINA_DISABLE_DEBUG
 		typedef typename String<M>::Type StringType;
 		typedef std::function<void(const StringType& key, const StringType& value)> PropertyIter;
-		void for_each_property(const PropertyIter& callback) const;
+		void for_each_property(const PropertyIter& callback);
 #endif
 
 	private:
-		Mashina* mashina;
+		Mashina mashina;
 
 		typedef typename Allocator<Mashina>::Type AllocatorType;
 		AllocatorType allocator;
@@ -110,7 +110,7 @@ namespace bmashina
 
 template <typename M>
 bmashina::BasicState<M>::BasicState(Mashina& mashina) :
-	mashina(&mashina),
+	mashina(mashina),
 	allocator(mashina),
 	locals_by_key(LocalMap::construct(mashina)),
 	locals(LocalSet::construct(mashina)),
@@ -272,7 +272,7 @@ void bmashina::BasicState<M>::set_locals_key(const void* key)
 	current_locals_key = key;
 	if (locals_by_key.count(key) == 0)
 	{
-		locals_by_key.emplace(key, LocalSet::construct(*mashina));
+		locals_by_key.emplace(key, LocalSet::construct(mashina));
 	}
 }
 
@@ -401,7 +401,7 @@ void bmashina::BasicState<M>::remove_value(const detail::BaseReference* key)
 #include <cstdio>
 
 template <typename M>
-void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback) const
+void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback)
 {
 	for (auto& i: values)
 	{
@@ -411,17 +411,17 @@ void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback) co
 			auto iter = value_printers.find(reference);
 			if (iter != value_printers.end() && i.second != nullptr )
 			{
-				value = iter->second(*mashina, *this, reference);
+				value = iter->second(mashina, *this, reference);
 			}
 			else
 			{
 				if (i.second == nullptr)
 				{
-					value = String<M>::construct(*mashina, "(null)");
+					value = String<M>::construct(mashina, "(null)");
 				}
 				else
 				{
-					value = String<M>::construct(*mashina, "(unknown)");
+					value = String<M>::construct(mashina, "(unknown)");
 				}
 			}
 		}
@@ -431,11 +431,11 @@ void bmashina::BasicState<M>::for_each_property(const PropertyIter& callback) co
 			char name[32];
 			std::snprintf(name, sizeof(name), "%p", reference);
 
-			callback(String<M>::construct(*mashina, name), value);
+			callback(String<M>::construct(mashina, name), value);
 		}
 		else
 		{
-			callback(String<M>::construct(*mashina, reference->name), value);
+			callback(String<M>::construct(mashina, reference->name), value);
 		}
 	}
 }

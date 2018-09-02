@@ -267,7 +267,8 @@ sol::object LuaProxyNode::call(
 			sol::error e = result;
 
 			auto L = instance.lua_state();
-			return sol::make_object(L, (int)Status::failure);
+			lua_pushstring(L, e.what());
+			lua_error(L);
 		}
 
 		return result;
@@ -285,7 +286,16 @@ void LuaProxyNode::event(
 	if (instance[method] != sol::nil)
 	{
 		sol::protected_function m = instance[method];
-		m(instance, executor.mashina(), &executor.state(), &executor);
+		auto result = m(instance, executor.mashina(), &executor.state(), &executor);
+
+		if (!result.valid())
+		{
+			sol::error e = result;
+
+			auto L = instance.lua_state();
+			lua_pushstring(L, e.what());
+			lua_error(L);
+		}
 	}
 }
 

@@ -102,7 +102,7 @@ namespace bmashina
 		void before_update(Executor& executor, Node& node);
 		void after_update(Executor& executor, Node& node, Status status);
 
-		Mashina* mashina;
+		Mashina mashina;
 
 		typedef typename Allocator<Mashina>::Type AllocatorType;
 		AllocatorType allocator;
@@ -188,7 +188,7 @@ namespace bmashina
 
 template <typename M>
 bmashina::BasicTree<M>::BasicTree(Mashina& mashina) :
-	mashina(&mashina),
+	mashina(mashina),
 	allocator(mashina),
 	nodes(NodeSet::construct(mashina)),
 	channels(ChannelSet::construct(mashina)),
@@ -566,7 +566,7 @@ bmashina::BasicTree<M>::get_children(Node& parent)
 	auto iter = children.find(&parent);
 	if (iter == children.end())
 	{
-		iter = children.emplace(&parent, NodeList::construct(*mashina)).first;
+		iter = children.emplace(&parent, NodeList::construct(mashina)).first;
 	}
 
 	return iter->second;
@@ -657,7 +657,7 @@ void bmashina::BasicTree<M>::input(
 	auto iter = node_inputs.find(&node);
 	if (iter == node_inputs.end())
 	{
-		iter = node_inputs.emplace(&node, WireList::construct(*mashina)).first;
+		iter = node_inputs.emplace(&node, WireList::construct(mashina)).first;
 	}
 
 	iter->second.push_back(std::make_tuple(&from, &to));
@@ -700,7 +700,7 @@ void bmashina::BasicTree<M>::output(
 	auto iter = node_outputs.find(&node);
 	if (iter == node_outputs.end())
 	{
-		iter = node_outputs.emplace(&node, WireList::construct(*mashina)).first;
+		iter = node_outputs.emplace(&node, WireList::construct(mashina)).first;
 	}
 
 	iter->second.push_back(std::make_tuple(&from, &to));

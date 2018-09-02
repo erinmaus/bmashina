@@ -129,14 +129,14 @@ function TreeBuilder.Node(parent, name)
 	return setmetatable(r, TreeBuilderNode)
 end
 
-function TreeBuilder.materialize(node, aliases)
+function TreeBuilder.materialize(mashina, node, aliases)
 	if getmetatable(node) ~= TreeBuilderNode then
 		error(debug.traceback("expected TreeBuilder"))
 	end
 
 	aliases = aliases or {}
 
-	local tree = B.Tree()
+	local tree = B.Tree(mashina)
 	do
 		local root = node._arguments[1]
 		local class = import(root._path, root._arguments, aliases)
