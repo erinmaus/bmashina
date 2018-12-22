@@ -168,6 +168,7 @@ class LuaProxyNode : public Node
 {
 public:
 	LuaProxyNode(lua_State* L, int index);
+	~LuaProxyNode();
 
 	Status update(Executor& executor) override;
 
@@ -216,6 +217,25 @@ LuaProxyNode::LuaProxyNode(lua_State* L, int index) :
 	if (instance["new"] != sol::nil)
 	{
 		instance["new"](instance);
+	}
+}
+
+LuaProxyNode::~LuaProxyNode()
+{
+	instance["tree"] = &tree();
+
+	if (instance["removed"] != sol::nil)
+	{
+		sol::protected_function m = instance["removed"];
+		auto result = m(instance);
+		if (!result.valid())
+		{
+			sol::error e = result;
+
+			auto L = instance.lua_state();
+			lua_pushstring(L, e.what());
+			lua_error(L);
+		}
 	}
 }
 
