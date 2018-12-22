@@ -272,16 +272,10 @@ void bmashina::BasicExecutor<M>::visit(Node& node)
 template <typename M>
 void bmashina::BasicExecutor<M>::drop()
 {
-	assert(current_depth > 0);
-
-#ifndef BMASHINA_DISABLE_EXCEPTION_HANDLING
-	if (current_depth == 0)
+	if (current_frame)
 	{
-		throw std::runtime_error("tree is not executing");
+		current_frame->shrink(0);
 	}
-#endif
-
-	current_frame->shrink(0);
 }
 
 template <typename M>
