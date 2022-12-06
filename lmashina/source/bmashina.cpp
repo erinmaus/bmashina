@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <limits>
 
 #include "deps/sol.hpp"
 #include "lmashina/lmashina.hpp"
