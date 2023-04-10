@@ -19,7 +19,7 @@ local function import(path, args, aliases)
 		table.insert(real_path, m)
 	end
 
-	local success, result = pcall(require, table.concat(real_path, "."))
+	local success, result = xpcall(require, debug.traceback, table.concat(real_path, "."))
 	if success then
 		return result
 	else
