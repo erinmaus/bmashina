@@ -10,7 +10,11 @@ newoption {
 
 solution "BMASHINA"
 	configurations { "Debug", "Release" }
-	platforms { "x64" }
+
+	configuration "macosx"
+		platforms { "x64", "ARM64" }
+	configuration {}
+		platforms { "x64" }
 
 	configuration "Debug"
 		defines { "DEBUG" }
@@ -35,6 +39,8 @@ solution "BMASHINA"
 			targetdir "bin"
 		configuration "windows"
 			defines { "BMASHINA_BUILDING_WINDOWS" }
+		configuration "macosx"
+			systemversion "10.7"
 		configuration {}
 			runtime "release"
 

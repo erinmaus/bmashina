@@ -15,7 +15,6 @@
 #include "lmashina/lmashina.hpp"
 #include "bmashina/bmashina.hpp"
 #include "bmashina/builder/builder.hpp"
-#include "bmashina/debug/debug.hpp"
 #include "bmashina/primitives/primitives.hpp"
 
 // Nodes.
